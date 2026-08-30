@@ -10,6 +10,7 @@ from __future__ import annotations
 import pathlib
 from dataclasses import replace
 
+import asyncio
 import gzip
 import json
 import os
@@ -18,7 +19,8 @@ import time
 from collections import OrderedDict
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 from ..policy import POLICIES
@@ -119,7 +121,10 @@ _COST = {"factor": 3.0, "samples": 0}
 # policy and reuses the rest. Incremental exploration -- which is how the tool
 # is actually used -- becomes nearly free.
 _CACHE: "OrderedDict[tuple, dict]" = OrderedDict()
-_CACHE_MAX = 600
+# Raised at load time to fit the precomputed set plus headroom. A cap smaller
+# than the preloaded set silently evicts part of it -- which is exactly how a
+# precomputed file once shipped missing its first 200 entries.
+_CACHE_MAX = 1200
 _CACHE_LOCK = threading.Lock()
 _CACHE_STATS = {"hits": 0, "misses": 0, "preloaded": 0}
 
@@ -171,11 +176,15 @@ def _load_precomputed() -> int:
             entries = json.load(f)
     except (OSError, ValueError):
         return 0
+    global _CACHE_MAX
+    _CACHE_MAX = max(_CACHE_MAX, len(entries) + 300)
     n = 0
     for e in entries:
         _cache_put(tuple(e["key"]), e["value"])
         n += 1
     _CACHE_STATS["preloaded"] = n
+    if len(_CACHE) < n:  # must not happen; loudly better than silently partial
+        raise RuntimeError(f"cache holds {len(_CACHE)} of {n} preloaded entries")
     return n
 
 
@@ -296,6 +305,65 @@ def scenarios() -> dict:
     }
 
 
+def _one_sim(scenario: str, param: float, pol: str, depth: int, duration: float) -> dict:
+    """Run a single simulation and shape it for the wire."""
+    sc = next(s for s in SCENARIOS if s.key == scenario)
+    case = sc.build(param, WorkloadConfig(duration=duration))
+    case.policy = POLICIES[pol]
+    case.retry = replace(case.retry, max_attempts=depth)
+    result = Simulation(
+        case.provider, case.workload, case.policy, case.client, case.retry
+    ).run()
+    lat = sorted(r.latency for r in result.records if r.ok)
+    return {
+        "label": f"{pol} / {depth} tries",
+        "policy": pol,
+        "retries": depth,
+        "summary": result.summary(),
+        "samples": _thin(result.samples),
+        "latency_cdf": _cdf(lat),
+    }
+
+
+@app.post("/api/run/stream")
+async def run_stream(req: RunRequest) -> StreamingResponse:
+    """Stream one JSON object per simulation, as each finishes.
+
+    Two problems with computing the whole batch before responding: nothing
+    appears until the slowest simulation is done, and with a single worker the
+    CPU-bound loop blocks every other request -- so one person exploring can
+    stop everyone else loading the page.
+
+    Each simulation runs in a worker thread, so the event loop stays free to
+    serve cached and static requests in between.
+    """
+
+    async def gen():
+        pairs = [(p, d) for p in req.policies for d in req.retries]
+        yield json.dumps({"type": "start", "total": len(pairs),
+                          "cost_factor": _COST["factor"]}) + "\n"
+        for i, (pol, depth) in enumerate(pairs, 1):
+            key = _sim_key(req.scenario, req.param, pol, depth, req.duration)
+            entry = _cache_get(key)
+            cached = entry is not None
+            if entry is None:
+                started = time.monotonic()
+                entry = await run_in_threadpool(
+                    _one_sim, req.scenario, req.param, pol, depth, req.duration
+                )
+                _record_cost(time.monotonic() - started, 1, req.duration)
+                _cache_put(key, entry)
+            yield json.dumps({
+                "type": "sim", "index": i, "total": len(pairs),
+                "cached": cached, "key": _wire_key(key), "entry": entry,
+                "cost_factor": _COST["factor"],
+            }, default=float) + "\n"
+            await asyncio.sleep(0)          # let queued requests through
+        yield json.dumps({"type": "done", "cost_factor": _COST["factor"]}) + "\n"
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
 @app.post("/api/run")
 def run(req: RunRequest) -> dict:
     sc = next(s for s in SCENARIOS if s.key == req.scenario)
@@ -313,22 +381,7 @@ def run(req: RunRequest) -> dict:
                 continue
 
             started = time.monotonic()
-            case = sc.build(req.param, base)
-            case.policy = POLICIES[pol]
-            case.retry = replace(case.retry, max_attempts=depth)
-            result = Simulation(
-                case.provider, case.workload, case.policy, case.client, case.retry
-            ).run()
-            summary = result.summary()
-            lat = sorted(r.latency for r in result.records if r.ok)
-            entry = {
-                "label": f"{pol} / {depth} tries",
-                "policy": pol,
-                "retries": depth,
-                "summary": summary,
-                "samples": result.samples[::2],
-                "latency_cdf": _cdf(lat),
-            }
+            entry = _one_sim(req.scenario, req.param, pol, depth, req.duration)
             elapsed += time.monotonic() - started
             computed += 1
             _cache_put(key, entry)
@@ -351,6 +404,17 @@ def run(req: RunRequest) -> dict:
             for e in series
         ],
     }
+
+
+# Charts need a couple of hundred points; a 15-minute run otherwise carries
+# twice the samples of a 6.7-minute one for no visible gain, inflating both the
+# payload and the precomputed cache.
+TARGET_SAMPLES = 200
+
+
+def _thin(samples: list) -> list:
+    step = max(1, len(samples) // TARGET_SAMPLES)
+    return samples[::step]
 
 
 def _cdf(values: list[float], n: int = 60) -> list[dict]:

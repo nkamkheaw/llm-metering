@@ -18,12 +18,19 @@ import pathlib
 import time
 
 from llm_metering.scenarios import SCENARIOS
-from llm_metering.ui.server import RETRY_CHOICES, _production_default, _sim_key, run
-from llm_metering.ui.server import RunRequest, _CACHE
+from llm_metering.ui.server import (
+    RETRY_CHOICES,
+    _one_sim,
+    _production_default,
+    _sim_key,
+)
 
-DURATION = 400.0
+# Every duration the UI offers, not just the default: a 15-minute run at retry
+# depth 10 was previously uncached and took ~18s on a small instance, which is
+# exactly the case that felt broken.
+DURATIONS = [400.0, 600.0, 900.0]
 POLICIES = ["none", "fifo_backoff", "admission", "admission_cache", "admission_cache_accel"]
-COMMON_RETRIES = [3, 7]
+COMMON_RETRIES = [1, 3, 5, 7, 10]
 
 
 def matching_param(key: str, sweep: list) -> float | None:
@@ -42,12 +49,13 @@ def main() -> None:
     sweep = json.loads(sweep_path.read_text()) if sweep_path.exists() else []
     prod = _production_default()
 
-    jobs: list[tuple[str, float, str, int]] = []
+    jobs: list[tuple[str, float, str, int, float]] = []
 
-    def add(scenario: str, param: float, policies, retries):
-        for pol in policies:
-            for d in retries:
-                jobs.append((scenario, param, pol, d))
+    def add(scenario: str, param: float, policies, retries, durations=None):
+        for dur in (durations or DURATIONS):
+            for pol in policies:
+                for d in retries:
+                    jobs.append((scenario, param, pol, d, dur))
 
     for sc in SCENARIOS:
         params = {sc.values[len(sc.values) // 2]}          # the UI's default
@@ -66,15 +74,19 @@ def main() -> None:
             seen.add(j)
             uniq.append(j)
 
-    print(f"Computing {len(uniq)} simulations at {DURATION:.0f}s each...")
+    print(f"Computing {len(uniq)} simulations across {DURATIONS}...", flush=True)
     t0 = time.monotonic()
-    for i, (scenario, param, pol, depth) in enumerate(uniq, 1):
-        run(RunRequest(scenario=scenario, param=param, policies=[pol],
-                       retries=[depth], duration=DURATION))
-        if i % 20 == 0:
-            print(f"  {i}/{len(uniq)}  ({time.monotonic()-t0:.0f}s)")
+    # Accumulated here rather than in the server's LRU cache: that cache evicts,
+    # and a build silently losing its oldest entries is far worse than a slow one.
+    built: dict[tuple, dict] = {}
+    for i, (scenario, param, pol, depth, dur) in enumerate(uniq, 1):
+        key = _sim_key(scenario, param, pol, depth, dur)
+        built[key] = _one_sim(scenario, param, pol, depth, dur)
+        if i % 50 == 0:
+            print(f"  {i}/{len(uniq)}  ({time.monotonic()-t0:.0f}s)", flush=True)
 
-    entries = [{"key": list(k), "value": v} for k, v in _CACHE.items()]
+    assert len(built) == len(uniq), f"built {len(built)} of {len(uniq)}"
+    entries = [{"key": list(k), "value": v} for k, v in built.items()]
     out = pathlib.Path("precomputed.json.gz")
     with gzip.open(out, "wt", encoding="utf-8", compresslevel=9) as f:
         json.dump(entries, f, separators=(",", ":"), default=float)

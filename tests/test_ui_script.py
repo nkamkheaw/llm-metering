@@ -77,7 +77,7 @@ def test_module_globals_are_declared(page):
                        "timer", "inflight", "estimate", "schedule", "run", "render",
                        "boot", "chips", "cur", "onScenario", "applyState", "copyLink",
                        "readURL", "writeURL", "isProduction", "updateViewBar",
-                       "updateStatus", "markStale", "tradeoff", "headroom", "latency",
+                       "updateStatus", "markStale", "showProgress", "tradeoff", "headroom", "latency",
                        "PAL", "G", "el", "f", "matches"],
         "overview.html": ["PALETTE", "G", "pct", "render", "timeline"],
     }[page]
@@ -102,5 +102,18 @@ def test_explorer_reads_cost_factor_from_server():
     """The auto-run budget must come from the host's measured speed, not a
     hardcoded local timing -- the instance is ~11x slower than the dev laptop."""
     src = script_of("index.html")
-    assert "META.cost_factor" in src and "LAST.cost_factor" in src
+    assert "META.cost_factor" in src, "must seed the factor at boot"
+    assert "msg.cost_factor" in src, "must refresh the factor from streamed updates"
     assert "* COST" in src, "estimate() must scale by the server-measured factor"
+
+
+def test_explorer_renders_incrementally():
+    """Rows must be painted as each simulation streams in.
+
+    Computing the whole batch before showing anything is what made a 4-run
+    comparison look like a frozen page for 20 seconds.
+    """
+    src = script_of("index.html")
+    assert "/api/run/stream" in src
+    assert "getReader()" in src, "must consume the response as a stream"
+    assert src.count("render(LAST)") >= 2, "must repaint per simulation, not only at the end"

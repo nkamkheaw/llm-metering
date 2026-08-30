@@ -158,7 +158,7 @@
   .status.manual{color:var(--warn)}
   button.run.auto{background:var(--panel);color:var(--mid);border:1px solid var(--line)}
   button.run.auto:hover{border-color:var(--muted);filter:none}
-  main.busy{opacity:.45}
+  main.busy{opacity:.75}
   main.stale{opacity:.5}
   .stalebar{font-family:var(--data);font-size:11.5px;letter-spacing:.03em;color:var(--warn);
     background:var(--warn-soft);border:1px solid var(--line);padding:10px 14px;margin-bottom:16px}
@@ -246,7 +246,10 @@ let META=null, sel={policies:new Set(['none']), retries:new Set([3])}, LAST=null
 // host speed factor the SERVER measures from real runs -- a laptop sits near
 // 1.0, this App Service instance around 11. Estimating from a hardcoded local
 // timing would promise instant updates the host cannot deliver.
-const AUTO_BUDGET = 3.0;
+// Results stream in one simulation at a time, so a longer job shows its first
+// row within seconds rather than freezing. That makes a much larger budget
+// reasonable than when the whole batch had to finish before anything appeared.
+const AUTO_BUDGET = 25.0;
 let timer = null, inflight = null, COST = 3.0;
 
 // Results are deterministic and cached server-side (and partly precomputed and
@@ -354,6 +357,16 @@ function schedule(){
   else markStale();
 }
 
+function showProgress(done, total, t0){
+  if (done >= total) return;
+  const box = document.getElementById('status');
+  const each = done ? (performance.now() - t0) / done : 0;
+  const left = each ? Math.round((total - done) * each / 1000) : null;
+  box.innerHTML = `<b>${done}</b> of <b>${total}</b> simulations done`
+    + (left ? ` &middot; about <b>${left}s</b> left` : '')
+    + `<br>Results appear as each finishes.`;
+}
+
 function markStale(){
   const main = document.getElementById('out');
   if (!main.querySelector('.verdict')) return;        // nothing shown yet
@@ -452,11 +465,35 @@ async function run(){
     policies:[...sel.policies], retries:[...sel.retries].sort((a,b)=>a-b),
     duration:parseFloat(document.getElementById('duration').value) };
   try{
-    const res = await fetch('/api/run',{method:'POST',signal:ctrl.signal,
+    const res = await fetch('/api/run/stream',{method:'POST',signal:ctrl.signal,
       headers:{'content-type':'application/json'},body:JSON.stringify(body)});
-    LAST = await res.json();
-    if (Number.isFinite(LAST.cost_factor)) COST = LAST.cost_factor;
-    (LAST.keys || []).forEach(k => seen.add(k));
+    if (!res.ok) throw new Error(`server returned ${res.status}`);
+
+    // Read NDJSON as it arrives and repaint after each simulation, so the page
+    // fills in progressively instead of sitting blank until the slowest one.
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = '', series = [], total = 0, t0 = performance.now();
+    LAST = { scenario: body.scenario, param: body.param, series };
+
+    for(;;){
+      const {value, done} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream:true});
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0){
+        const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line);
+        if (Number.isFinite(msg.cost_factor)) COST = msg.cost_factor;
+        if (msg.type === 'start'){ total = msg.total; showProgress(0, total, t0); }
+        else if (msg.type === 'sim'){
+          series.push(msg.entry);
+          seen.add(msg.key);
+          render(LAST);
+          showProgress(msg.index, total, t0);
+        }
+      }
+    }
     render(LAST);
   } catch(e){
     if (e.name === 'AbortError') return;    // superseded; the newer run owns the UI

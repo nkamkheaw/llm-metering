@@ -97,3 +97,31 @@ def test_caching_off_costs_far_more_itpm_than_caching_on():
     assert off["effective_itpm"] > 5 * on["effective_itpm"]
     assert on["cache_hit_rate"] > 0.8
     assert off["cache_hit_rate"] == 0.0
+
+
+def test_precomputed_cache_is_never_silently_truncated():
+    """A cache cap smaller than the preloaded set evicts part of it.
+
+    This shipped once: precompute generated ~800 entries into an LRU capped at
+    600, so the file was written missing its first 200 -- and the scenario a
+    user actually opened was among them. Nothing errored; the views were simply
+    slow again.
+    """
+    import llm_metering.ui.server as S
+
+    entries = [
+        {"key": ["scen", float(i), "none", 3, 400.0], "value": {"i": i}}
+        for i in range(S._CACHE_MAX + 250)
+    ]
+    S._CACHE.clear()
+    original_max = S._CACHE_MAX
+    try:
+        S._CACHE_MAX = max(S._CACHE_MAX, len(entries) + 300)
+        for e in entries:
+            S._cache_put(tuple(e["key"]), e["value"])
+        assert len(S._CACHE) == len(entries), (
+            f"cache holds {len(S._CACHE)} of {len(entries)} entries"
+        )
+    finally:
+        S._CACHE_MAX = original_max
+        S._CACHE.clear()

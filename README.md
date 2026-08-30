@@ -45,7 +45,7 @@ and `llm_metering/sim/workload.py`; change them to match your own workload.
 
 ## Running
 
-    python -m pytest tests/ -q            # 42 tests
+    python -m pytest tests/ -q            # 44 tests
     python -m llm_metering.sweep 600      # Step 2a  -> sweep_2a.json
     python run_2b.py                      # Step 2b  -> sweep_2b.json
     python -m llm_metering.signatures     # Step 3   -> signatures.json
@@ -78,11 +78,16 @@ the commands above after changing scenarios, workload parameters or limits.
     /brief       The built leadership brief (run `python build_artifact.py` first).
     /health      Liveness, host speed factor, and cache statistics.
 
+Results stream in one simulation at a time (`/api/run/stream`, NDJSON) and the
+page repaints as each lands, so a slow batch fills in progressively instead of
+freezing until the last one finishes. Each simulation runs in a worker thread,
+so one person's long comparison does not block everyone else's requests — with
+a single worker and a blocking endpoint, it would.
+
 The explorer runs on its own as you change options, debounced ~260ms, when the
-projected cost is under ~3s. Heavier selections wait for an explicit click
-rather than firing a long job on every toggle. An in-flight run is aborted
-whenever the selection changes, so a stale result can never be painted under
-controls it does not match.
+projected cost is under ~25s. Heavier selections wait for an explicit click. An
+in-flight run is aborted whenever the selection changes, so a stale result can
+never be painted under controls it does not match.
 
 Duration options all cover at least one busy period. Shorter runs would contain
 none, and `p99_latency_peak` would then be 0.0 by construction rather than by
@@ -101,7 +106,11 @@ Simulations are CPU-bound and deterministic. Three things exploit that:
 * **Per-simulation caching.** Keyed per simulation rather than per request, so
   adding one policy to an existing comparison computes only that policy.
 * **A precomputed cache** (`precomputed.json.gz`, built by `precompute.py`) is
-  loaded at startup, so common views cost nothing and survive restarts.
+  loaded at startup, so common views cost nothing and survive restarts. It
+  covers every scenario at its default and matching parameter, across all
+  policies, retry depths and durations. The runtime cache cap grows to fit it:
+  a cap smaller than the preloaded set silently evicts part of it, and a
+  partially-loaded cache raises rather than serving quietly-slow views.
 * **A measured host speed factor.** The server times its own runs and reports
   `cost_factor`; the UI multiplies its auto-run estimate by it and seeds its
   "already computed" set from the server's cache keys. Estimating from a
