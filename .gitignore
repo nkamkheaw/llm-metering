@@ -1,0 +1,17 @@
+# Virtualenv and vendored wheels (the latter is ~11 MB, produced by deployment)
+.venv/
+.python_packages/
+
+# Python bytecode and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Built brief (regenerate with: python build_artifact.py)
+artifact/
+
+# Deployment payloads
+*.zip
+
+# macOS
+.DS_Store

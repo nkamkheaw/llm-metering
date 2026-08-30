@@ -1,0 +1,124 @@
+{
+ "surviving": [
+  "itpm_broken_cache",
+  "cache_herd",
+  "rpm_burst",
+  "acceleration"
+ ],
+ "robust_field_set": [
+  "headroom_requests",
+  "headroom_input_tokens",
+  "cache_hit_rate",
+  "throttled"
+ ],
+ "robust_sources": {
+  "headroom_requests": "anthropic-ratelimit-requests-remaining / -limit",
+  "headroom_input_tokens": "anthropic-ratelimit-input-tokens-remaining / -limit",
+  "cache_hit_rate": "usage.cache_read_input_tokens / total input",
+  "throttled": "count of 429/529 responses"
+ },
+ "all_signatures": {
+  "itpm_broken_cache": {
+   "headroom_requests": "healthy",
+   "headroom_input_tokens": "collapsed",
+   "headroom_output_tokens": "healthy",
+   "cache_hit_rate": "none",
+   "throttled": "yes",
+   "retry_amplification": "low",
+   "max_in_flight": "capped"
+  },
+  "cache_herd": {
+   "headroom_requests": "healthy",
+   "headroom_input_tokens": "collapsed",
+   "headroom_output_tokens": "healthy",
+   "cache_hit_rate": "working",
+   "throttled": "yes",
+   "retry_amplification": "high",
+   "max_in_flight": "uncapped"
+  },
+  "rpm_burst": {
+   "headroom_requests": "collapsed",
+   "headroom_input_tokens": "healthy",
+   "headroom_output_tokens": "healthy",
+   "cache_hit_rate": "working",
+   "throttled": "yes",
+   "retry_amplification": "high",
+   "max_in_flight": "capped"
+  },
+  "acceleration": {
+   "headroom_requests": "healthy",
+   "headroom_input_tokens": "healthy",
+   "headroom_output_tokens": "healthy",
+   "cache_hit_rate": "working",
+   "throttled": "yes",
+   "retry_amplification": "high",
+   "max_in_flight": "capped"
+  },
+  "pool_exhaustion": {
+   "headroom_requests": "healthy",
+   "headroom_input_tokens": "healthy",
+   "headroom_output_tokens": "healthy",
+   "cache_hit_rate": "working",
+   "throttled": "no",
+   "retry_amplification": "low",
+   "max_in_flight": "capped"
+  }
+ },
+ "raw_values": {
+  "itpm_broken_cache": {
+   "headroom_requests": 1.0,
+   "headroom_input_tokens": 8.532273660393106e-05,
+   "headroom_output_tokens": 1.0,
+   "cache_hit_rate": 0.0,
+   "throttled": 4228,
+   "retry_amplification": 1.2698149329929802,
+   "max_in_flight": 154
+  },
+  "cache_herd": {
+   "headroom_requests": 1.0,
+   "headroom_input_tokens": 1.4992080593453328e-05,
+   "headroom_output_tokens": 1.0,
+   "cache_hit_rate": 0.938875905575905,
+   "throttled": 24941,
+   "retry_amplification": 1.6617405147253914,
+   "max_in_flight": 462
+  },
+  "rpm_burst": {
+   "headroom_requests": 6.829682184994506e-05,
+   "headroom_input_tokens": 1.0,
+   "headroom_output_tokens": 1.0,
+   "cache_hit_rate": 0.9369975756435354,
+   "throttled": 14398,
+   "retry_amplification": 2.520540711796388,
+   "max_in_flight": 39
+  },
+  "acceleration": {
+   "headroom_requests": 1.0,
+   "headroom_input_tokens": 1.0,
+   "headroom_output_tokens": 1.0,
+   "cache_hit_rate": 0.9224570768225806,
+   "throttled": 9066,
+   "retry_amplification": 1.5749619482496195,
+   "max_in_flight": 104
+  },
+  "pool_exhaustion": {
+   "headroom_requests": 1.0,
+   "headroom_input_tokens": 1.0,
+   "headroom_output_tokens": 1.0,
+   "cache_hit_rate": 0.922386595201274,
+   "throttled": 0,
+   "retry_amplification": 1.0,
+   "max_in_flight": 40
+  }
+ },
+ "minimal_field_set": [
+  "headroom_requests",
+  "headroom_input_tokens",
+  "cache_hit_rate"
+ ],
+ "sources": {
+  "headroom_requests": "anthropic-ratelimit-requests-remaining / -limit",
+  "headroom_input_tokens": "anthropic-ratelimit-input-tokens-remaining / -limit",
+  "cache_hit_rate": "usage.cache_read_input_tokens / total input"
+ }
+}

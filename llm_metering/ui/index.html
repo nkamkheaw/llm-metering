@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scheduler policy explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+  :root{
+    --bg:#f2f4f6; --panel:#fff; --panel-2:#e9edf1; --panel-3:#f7f9fa;
+    --ink:#14181d; --mid:#4d5560; --muted:#7d8794;
+    --line:#dde2e8; --line-soft:#eaeef2;
+    --ok:#1e6b4c; --ok-soft:#dcece4;
+    --stop:#c62f27; --stop-soft:#f7dedb;
+    --warn:#9a6206; --warn-soft:#f6ecd8;
+    --s1:#c62f27; --s2:#1e6b4c; --s3:#2b5f9e; --s4:#7a4b9c; --s5:#9a6206; --s6:#2f7c7c;
+    --display:"Barlow",system-ui,sans-serif;
+    --body:"Source Serif 4",Georgia,serif;
+    --data:"IBM Plex Mono",ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#14171b; --panel:#1b1f25; --panel-2:#232830; --panel-3:#1f242b;
+    --ink:#eef1f4; --mid:#b3bcc6; --muted:#828d9a;
+    --line:#2e343d; --line-soft:#22272e;
+    --ok:#4fb086; --ok-soft:#163026;
+    --stop:#f0665a; --stop-soft:#3a1c1a;
+    --warn:#d9a13d; --warn-soft:#332714;
+    --s1:#f0665a; --s2:#4fb086; --s3:#6ea3e0; --s4:#b48ada; --s5:#d9a13d; --s6:#5fb5b5;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#14171b; --panel:#1b1f25; --panel-2:#232830; --panel-3:#1f242b;
+    --ink:#eef1f4; --mid:#b3bcc6; --muted:#828d9a;
+    --line:#2e343d; --line-soft:#22272e;
+    --ok:#4fb086; --ok-soft:#163026;
+    --stop:#f0665a; --stop-soft:#3a1c1a;
+    --warn:#d9a13d; --warn-soft:#332714;
+    --s1:#f0665a; --s2:#4fb086; --s3:#6ea3e0; --s4:#b48ada; --s5:#d9a13d; --s6:#5fb5b5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);
+    font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,.gauge-pct,.stat b,button,.chip,.badge,.verdict-n{font-family:var(--display)}
+  .eyebrow,.lbl,th,td,.mono,.tag,.unit,.axis{font-family:var(--data)}
+  .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:500}
+
+  /* ---- shell ---- */
+  .topbar{border-bottom:1px solid var(--line);background:var(--panel);
+    padding:18px 30px;display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+  .topbar h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-0.02em}
+  .topbar .sub{font-size:14.5px;color:var(--muted);max-width:62ch}
+  .topbar a{color:var(--stop);font-family:var(--data);font-size:12px;text-decoration:none;
+    border-bottom:1px solid transparent;margin-left:auto;white-space:nowrap}
+  .topbar a:hover{border-bottom-color:var(--stop)}
+  /* ---- context band ---- */
+  .context{border-bottom:1px solid var(--line);background:var(--panel-3);
+    display:grid;grid-template-columns:1fr 300px;gap:44px;padding:24px 30px 26px}
+  @media (max-width:920px){.context{grid-template-columns:1fr;gap:24px}}
+  .context p{margin:9px 0 0;font-size:15px;line-height:1.58;color:var(--mid);max-width:74ch}
+  .context .ctx-how{margin-top:12px;font-size:14.5px}
+  .context b{color:var(--ink);font-weight:600}
+  .obs{display:flex;gap:26px;margin-top:11px;flex-wrap:wrap}
+  .obs div{min-width:78px}
+  .obs b{display:block;font-family:var(--display);font-size:23px;font-weight:600;
+    line-height:1.1;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:var(--stop)}
+  .obs span{display:block;font-family:var(--data);font-size:10.5px;color:var(--muted);
+    margin-top:5px;line-height:1.4;letter-spacing:.02em}
+  .ctx-warn{font-family:var(--data);font-size:11.5px!important;line-height:1.65!important;
+    color:var(--muted);margin-top:16px!important;padding-top:13px;border-top:1px solid var(--line)}
+  .app{display:grid;grid-template-columns:308px 1fr;align-items:start}
+  @media (max-width:920px){.app{grid-template-columns:1fr}
+    aside{border-right:0!important;border-bottom:1px solid var(--line);position:static!important}}
+  aside{padding:24px 26px 30px;border-right:1px solid var(--line);position:sticky;top:0;
+    background:var(--panel)}
+  main{padding:24px 30px 90px;min-width:0}
+
+  /* ---- controls ---- */
+  .lbl{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);margin:22px 0 8px;font-weight:500}
+  .lbl:first-child{margin-top:0}
+  select{width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    padding:9px 10px;font-family:var(--body);font-size:15px;border-radius:0}
+  select:focus-visible{outline:2px solid var(--stop);outline-offset:1px}
+  .hint{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .mech{font-size:13.5px;color:var(--mid);margin-top:10px;padding-left:11px;
+    border-left:2px solid var(--stop);line-height:1.5}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-family:var(--data);font-size:12px;border:1px solid var(--line);background:var(--panel);
+    color:var(--mid);padding:5px 11px;cursor:pointer;user-select:none;transition:none}
+  .chip:hover{border-color:var(--muted)}
+  .chip.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+  .chip:focus-visible{outline:2px solid var(--stop);outline-offset:2px}
+  button.run{margin-top:26px;width:100%;background:var(--stop);color:#fff;border:0;padding:13px;
+    font-size:15px;font-weight:600;cursor:pointer;letter-spacing:.01em}
+  button.run:hover{filter:brightness(1.07)}
+  button.run:disabled{opacity:.5;cursor:default}
+  button.run:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+  /* ---- results ---- */
+  .card{background:var(--panel);border:1px solid var(--line);padding:22px 24px;margin-bottom:20px}
+  .card h2{margin:0 0 4px;font-size:17px;font-weight:600;letter-spacing:-0.01em}
+  .card .note{margin:0 0 16px;font-size:14px;color:var(--muted);max-width:70ch;line-height:1.5}
+
+  .verdict{display:flex;gap:0;border:1px solid var(--line);background:var(--panel);margin-bottom:20px;
+    flex-wrap:wrap}
+  .verdict div{padding:16px 22px;border-right:1px solid var(--line);flex:1;min-width:150px}
+  .verdict div:last-child{border-right:0}
+  .verdict-n{display:block;font-size:26px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+  .verdict .cap{display:block;font-family:var(--data);font-size:11px;color:var(--muted);
+    margin-top:7px;letter-spacing:.03em;line-height:1.45}
+  .verdict .hit{color:var(--stop)}
+
+  .scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-family:var(--data);font-size:13px;
+    font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:9px 11px;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  thead th{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+    font-weight:500;vertical-align:bottom;border-bottom:1px solid var(--line)}
+  thead th small{display:block;font-size:9.5px;letter-spacing:.03em;text-transform:none;
+    color:var(--muted);opacity:.8;font-weight:400;margin-top:3px}
+  tbody tr:hover{background:var(--panel-3)}
+  td.name{font-family:var(--data);font-size:12.5px;color:var(--ink)}
+  .swatch{display:inline-block;width:11px;height:3px;vertical-align:middle;margin-right:8px}
+  .badge{display:inline-block;font-family:var(--display);font-size:9.5px;font-weight:600;
+    letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;margin-left:6px}
+  .badge.best{background:var(--ok-soft);color:var(--ok)}
+  .badge.match{background:var(--stop-soft);color:var(--stop)}
+  td.good{color:var(--ok)}
+  td.bad{color:var(--stop)}
+  td.warn{color:var(--warn)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:18px;font-family:var(--data);font-size:12px;
+    color:var(--mid);margin-bottom:14px}
+  .legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:7px}
+  svg{display:block;width:100%;height:auto}
+  .runlabel{font-family:var(--data);font-size:11.5px;color:var(--muted);margin:16px 0 4px;
+    letter-spacing:.03em;display:flex;align-items:center;gap:8px}
+  .viewbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:11px 30px;border-bottom:1px solid var(--line);background:var(--panel);
+    font-family:var(--data);font-size:11.5px;letter-spacing:.03em;color:var(--muted)}
+  .viewbar .pill{padding:3px 10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    font-size:10px;font-family:var(--display)}
+  .viewbar .pill.prod{background:var(--stop-soft);color:var(--stop)}
+  .viewbar .pill.custom{background:var(--panel-2);color:var(--mid)}
+  .viewbar .what{color:var(--mid)}
+  .viewbar .acts{margin-left:auto;display:flex;gap:8px}
+  .viewbar button{font-family:var(--data);font-size:11px;letter-spacing:.03em;
+    background:var(--panel);color:var(--mid);border:1px solid var(--line);padding:5px 12px;
+    cursor:pointer}
+  .viewbar button:hover{border-color:var(--muted);color:var(--ink)}
+  .viewbar button:focus-visible{outline:2px solid var(--stop);outline-offset:2px}
+  .viewbar button.ok{border-color:var(--ok);color:var(--ok)}
+  .status{font-family:var(--data);font-size:11px;color:var(--muted);margin-top:11px;
+    line-height:1.6;letter-spacing:.02em}
+  .status b{color:var(--ink);font-weight:600}
+  .status.manual{color:var(--warn)}
+  button.run.auto{background:var(--panel);color:var(--mid);border:1px solid var(--line)}
+  button.run.auto:hover{border-color:var(--muted);filter:none}
+  main.busy{opacity:.45}
+  main.stale{opacity:.5}
+  .stalebar{font-family:var(--data);font-size:11.5px;letter-spacing:.03em;color:var(--warn);
+    background:var(--warn-soft);border:1px solid var(--line);padding:10px 14px;margin-bottom:16px}
+  .empty{padding:60px 20px;text-align:center;color:var(--muted);font-size:15px;
+    border:1px dashed var(--line);background:var(--panel)}
+  .pareto-note{font-family:var(--data);font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.6}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Scheduler policy explorer</h1>
+  <span class="sub">Pick a candidate explanation, then compare scheduler policies against it.</span>
+  <a href="/overview">Plain-language summary &rarr;</a>
+</div>
+
+<div class="viewbar">
+  <span class="pill prod" id="viewPill">Production today</span>
+  <span class="what" id="viewWhat"></span>
+  <span class="acts">
+    <button type="button" id="copyLink">Copy link to this view</button>
+    <button type="button" id="resetView">Reset to production</button>
+  </span>
+</div>
+
+<section class="context">
+  <div>
+    <span class="eyebrow">What we are investigating</span>
+    <p>Several hundred agents share one provider quota through the same SDK. Load is flat most of the time and spikes during work hours. Our dashboard tracks requests per minute and shows plenty of headroom even at peak &mdash; yet the slowest calls take around forty seconds. Something is throttling us that the dashboard cannot see.</p>
+    <p class="ctx-how"><b>How to use this:</b> pick one of five candidate explanations, set the parameter that governs it, and run scheduler policies against it. A run <b>matches</b> when it reproduces both observed numbers at once &mdash; a typical call near 1s <em>and</em> a worst-1% near 40s. That pairing is the bar a candidate has to clear to stay believable; hitting either number alone is easy and means nothing.</p>
+  </div>
+  <div>
+    <span class="eyebrow">Observed in production</span>
+    <div class="obs">
+      <div><b>1s</b><span>typical call</span></div>
+      <div><b>40s</b><span>slowest 1 in 100, at peak</span></div>
+      <div><b>10%</b><span>of minutes are spikes</span></div>
+    </div>
+    <p class="ctx-warn">Simulated against the provider&rsquo;s published rate-limit and caching rules. No production telemetry is wired in yet, so results narrow the candidates and say what to measure &mdash; they do not name the cause.</p>
+  </div>
+</section>
+
+<div class="app">
+  <aside>
+    <span class="lbl">Candidate explanation</span>
+    <select id="scenario" aria-label="Candidate explanation"></select>
+    <div class="mech" id="mech"></div>
+
+    <span class="lbl" id="paramLabel">Parameter</span>
+    <select id="param" aria-label="Governing parameter"></select>
+    <div class="hint" id="paramHelp"></div>
+
+    <span class="lbl">Scheduler policy</span>
+    <div class="chips" id="policies"></div>
+
+    <span class="lbl">Retry attempts per call</span>
+    <div class="chips" id="retries"></div>
+
+    <span class="lbl">Simulated minutes</span>
+    <select id="duration" aria-label="Simulated duration">
+      <option value="400" selected>6.7 — one busy period</option>
+      <option value="600">10 — two busy periods</option>
+      <option value="900">15 — three, steadier</option>
+    </select>
+    <div class="hint">Every option covers at least one busy period. Shorter runs
+      would contain none, making &ldquo;worst 1% at peak&rdquo; meaningless.</div>
+
+    <button class="run" id="go">Run simulation</button>
+    <div class="status" id="status"></div>
+  </aside>
+
+  <main id="out">
+    <div class="empty">Choose a candidate and a set of policies, then run.</div>
+  </main>
+</div>
+
+<script>
+const PAL = ['--s1','--s2','--s3','--s4','--s5','--s6'];
+const G = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const el = (t,a={}) => Object.assign(document.createElement(t), a);
+let META=null, sel={policies:new Set(['none']), retries:new Set([3])}, LAST=null;
+
+// Auto-run budget. Cost scales with simulations x simulated duration, times a
+// host speed factor the SERVER measures from real runs -- a laptop sits near
+// 1.0, this App Service instance around 11. Estimating from a hardcoded local
+// timing would promise instant updates the host cannot deliver.
+const AUTO_BUDGET = 3.0;
+let timer = null, inflight = null, COST = 3.0;
+
+// Results are deterministic and cached server-side (and partly precomputed and
+// shipped with the app), so a selection already fetched costs nothing to show
+// again. Tracking that here keeps toggling between two comparisons instant
+// instead of re-gating it behind the button on every switch.
+// Seeded from the server, which ships a precomputed cache built on a fast
+// machine. Tracking only what THIS session fetched would gate already-computed
+// views behind the button -- the exact thing that made auto-update look broken.
+const seen = new Set();
+const simKey = (pol, ret) => [cur().key,
+  String(parseFloat(document.getElementById('param').value)), pol, ret,
+  String(parseFloat(document.getElementById('duration').value))].join('|');
+const selectedKeys = () => {
+  const out = [];
+  for (const p of sel.policies) for (const r of sel.retries) out.push(simKey(p, r));
+  return out;
+};
+const uncachedCount = () => selectedKeys().filter(k => !seen.has(k)).length;
+
+// ---- shareable URL state -------------------------------------------------
+// Every control lives in the query string, so any view can be pasted to a
+// colleague and reopened exactly. With no query string the page shows the
+// production baseline instead of an arbitrary what-if.
+function readURL(){
+  const q = new URLSearchParams(location.search);
+  if (![...q.keys()].length) return null;
+  const list = (k) => (q.get(k)||'').split(',').map(x=>x.trim()).filter(Boolean);
+  return {
+    scenario: q.get('scenario'),
+    param: q.get('param')!==null ? parseFloat(q.get('param')) : null,
+    policies: list('policies'),
+    retries: list('retries').map(Number).filter(n=>!Number.isNaN(n)),
+    duration: q.get('duration') ? parseFloat(q.get('duration')) : null,
+  };
+}
+
+function writeURL(){
+  const q = new URLSearchParams({
+    scenario: cur().key,
+    param: String(document.getElementById('param').value),
+    policies: [...sel.policies].join(','),
+    retries: [...sel.retries].sort((a,b)=>a-b).join(','),
+    duration: String(document.getElementById('duration').value),
+  });
+  // replaceState, not pushState: a debounced control should not bury the back
+  // button under one entry per keystroke.
+  history.replaceState(null, '', `${location.pathname}?${q}`);
+  updateViewBar();
+}
+
+const isProduction = () => {
+  const P = META.production;
+  return cur().key === P.scenario
+    && parseFloat(document.getElementById('param').value) === P.param
+    && sel.policies.size === 1 && sel.policies.has('none')
+    && sel.retries.size === 1 && sel.retries.has(P.retries[0])
+    && parseFloat(document.getElementById('duration').value) === P.duration;
+};
+
+function updateViewBar(){
+  const P = META.production, prod = isProduction();
+  const pill = document.getElementById('viewPill'), what = document.getElementById('viewWhat');
+  pill.textContent = prod ? 'Production today' : 'Custom view';
+  pill.className = `pill ${prod?'prod':'custom'}`;
+  what.innerHTML = prod
+    ? `No scheduler, ${P.retries[0]} attempts per call &mdash; how the platform runs right now. `
+      + (P.matched
+        ? `Shown against <b>${cur().label.toLowerCase()}</b>, the closest of ${P.n_candidates} candidates that reproduce what we see &mdash; closest, not confirmed.`
+        : '')
+    : 'Changed from the production baseline. The link updates as you go &mdash; copy it to share this exact view.';
+}
+
+// Only simulations that are not already computed cost anything.
+const estimate = () => uncachedCount() *
+  (parseFloat(document.getElementById('duration').value) / 1000) * COST;
+
+function updateStatus(){
+  const n = sel.policies.size * sel.retries.size, est = estimate();
+  const box = document.getElementById('status'), btn = document.getElementById('go');
+  const auto = est <= AUTO_BUDGET;
+  box.classList.toggle('manual', !auto);
+  btn.classList.toggle('auto', auto);
+  btn.textContent = auto ? 'Re-run' : `Run ${n} simulations`;
+  const todo = uncachedCount(), ready = n - todo;
+  box.innerHTML = todo === 0
+    ? `<b>${n}</b> simulation${n>1?'s':''} &middot; <b>already computed</b><br>Shown from cache, instantly.`
+    : auto
+    ? `<b>${n}</b> simulation${n>1?'s':''}` + (ready ? ` &middot; ${ready} already computed` : '')
+      + ` &middot; about <b>${est.toFixed(1)}s</b><br>Updates on its own as you change options.`
+    : `<b>${todo}</b> new simulation${todo>1?'s':''}` + (ready ? ` (${ready} cached)` : '')
+      + ` &middot; about <b>${est.toFixed(0)}s</b><br>Too slow to run on every change &mdash; press the button.`;
+  return auto;
+}
+
+function schedule(){
+  writeURL();
+  clearTimeout(timer);
+  // Any in-flight run belongs to the previous selection. Letting it land would
+  // paint results that no longer match the controls, which is worse than no
+  // results at all -- so it is cancelled either way.
+  if (inflight){ inflight.abort(); inflight = null;
+    document.getElementById('out').classList.remove('busy'); }
+  if (updateStatus()) timer = setTimeout(run, 260);   // debounce rapid clicking
+  else markStale();
+}
+
+function markStale(){
+  const main = document.getElementById('out');
+  if (!main.querySelector('.verdict')) return;        // nothing shown yet
+  main.classList.add('stale');
+  if (!main.querySelector('.stalebar'))
+    main.insertBefore(Object.assign(document.createElement('div'),
+      {className:'stalebar',
+       textContent:'Showing the previous selection. Press Run to update.'}), main.firstChild);
+}
+
+async function boot(){
+  META = await (await fetch('/api/scenarios')).json();
+  if (Number.isFinite(META.cost_factor)) COST = META.cost_factor;
+  (META.cached_keys || []).forEach(k => seen.add(k));
+  const s = document.getElementById('scenario');
+  META.scenarios.forEach(x => s.append(el('option',{value:x.key,textContent:x.label})));
+  s.onchange = ()=>onScenario();
+  applyState(readURL() || META.production);
+  chips('policies', META.policies, sel.policies);
+  chips('retries', META.retry_choices || [1,3,5,7,10], sel.retries);
+  document.getElementById('param').onchange = schedule;
+  document.getElementById('duration').onchange = schedule;
+  document.getElementById('go').onclick = run;
+  document.getElementById('copyLink').onclick = copyLink;
+  document.getElementById('resetView').onclick = ()=>{
+    applyState(META.production);
+    chips('policies', META.policies, sel.policies);
+    chips('retries', META.retry_choices || [1,3,5,7,10], sel.retries);
+    schedule();
+  };
+  schedule();               // first result appears without anyone pressing anything
+
+function applyState(st){
+  const known = new Set(META.scenarios.map(x=>x.key));
+  const scEl = document.getElementById('scenario');
+  scEl.value = known.has(st.scenario) ? st.scenario : META.production.scenario;
+  onScenario({silent:true});
+  // Snap a shared parameter to the nearest offered value rather than dropping
+  // it: a link written before the value list changed still lands somewhere sane.
+  const vals = cur().values;
+  if (st.param != null && Number.isFinite(st.param)){
+    const near = vals.reduce((a,b)=> Math.abs(b-st.param) < Math.abs(a-st.param) ? b : a, vals[0]);
+    document.getElementById('param').value = String(near);
+  }
+  const pol = (st.policies||[]).filter(x=>META.policies.includes(x));
+  sel.policies = new Set(pol.length ? pol : ['none']);
+  const choices = META.retry_choices || [1,3,5,7,10];
+  const ret = (st.retries||[]).filter(n=>choices.includes(n));
+  sel.retries = new Set(ret.length ? ret : [3]);
+  const durEl = document.getElementById('duration');
+  if (st.duration && [...durEl.options].some(o=>parseFloat(o.value)===st.duration))
+    durEl.value = String(st.duration);
+}
+
+async function copyLink(){
+  const btn = document.getElementById('copyLink');
+  try{ await navigator.clipboard.writeText(location.href); }
+  catch(e){
+    const t=document.createElement('textarea'); t.value=location.href;
+    document.body.append(t); t.select(); document.execCommand('copy'); t.remove();
+  }
+  btn.textContent='Link copied'; btn.classList.add('ok');
+  setTimeout(()=>{ btn.textContent='Copy link to this view'; btn.classList.remove('ok'); }, 1800);
+}
+}
+function chips(id, vals, set){
+  const box = document.getElementById(id); box.innerHTML='';
+  vals.forEach(v=>{
+    const c = el('button',{className:'chip'+(set.has(v)?' on':''), textContent:String(v), type:'button'});
+    c.setAttribute('aria-pressed', set.has(v));
+    c.onclick = ()=>{ set.has(v) ? (set.size>1 && set.delete(v)) : set.add(v);
+      c.classList.toggle('on', set.has(v)); c.setAttribute('aria-pressed', set.has(v));
+      schedule(); };
+    box.append(c);
+  });
+}
+const cur = ()=> META.scenarios.find(x=>x.key===document.getElementById('scenario').value);
+function onScenario(opts){
+  const sc = cur();
+  document.getElementById('mech').textContent = sc.mechanism;
+  document.getElementById('paramLabel').textContent = sc.param_name.replace(/_/g,' ');
+  document.getElementById('paramHelp').textContent = sc.param_help;
+  const p = document.getElementById('param'); p.innerHTML='';
+  sc.values.forEach((v,i)=> p.append(el('option',{value:v,textContent:v,selected:i===Math.floor(sc.values.length/2)})));
+  if (META && !(opts && opts.silent)) schedule();
+}
+
+async function run(){
+  clearTimeout(timer);
+  if (inflight) inflight.abort();          // a newer selection supersedes the old one
+  const ctrl = inflight = new AbortController();
+  const btn = document.getElementById('go'), main = document.getElementById('out');
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Running…'; main.classList.add('busy');
+  const body = { scenario:cur().key, param:parseFloat(param.value),
+    policies:[...sel.policies], retries:[...sel.retries].sort((a,b)=>a-b),
+    duration:parseFloat(document.getElementById('duration').value) };
+  try{
+    const res = await fetch('/api/run',{method:'POST',signal:ctrl.signal,
+      headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+    LAST = await res.json();
+    if (Number.isFinite(LAST.cost_factor)) COST = LAST.cost_factor;
+    (LAST.keys || []).forEach(k => seen.add(k));
+    render(LAST);
+  } catch(e){
+    if (e.name === 'AbortError') return;    // superseded; the newer run owns the UI
+    main.innerHTML = `<div class="empty">Simulation failed: ${e.message}</div>`;
+  } finally {
+    if (inflight === ctrl){ inflight = null; main.classList.remove('busy'); }
+    btn.disabled = false; btn.textContent = label;
+    updateStatus();
+  }
+}
+
+const f = (n,d=2)=> n==null?'—':(Math.abs(n)>=10000?Math.round(n).toLocaleString():n.toFixed(d));
+const matches = (m,T)=> m.peak_requests>0
+  && m.p50_latency>=T.p50[0] && m.p50_latency<=T.p50[1]
+  && m.p99_latency_peak>=T.p99_peak[0] && m.p99_latency_peak<=T.p99_peak[1];
+
+function render(r){
+  const out = document.getElementById('out');
+  out.classList.remove('stale'); out.innerHTML='';
+  const T = META.target, S = r.series;
+
+  // ---- best-on-axis (there is no single best policy; each axis has its own)
+  const withPeak = S.filter(x=>x.summary.peak_requests>0);
+  const best = {
+    p99_latency_peak: withPeak.length
+      ? Math.min(...withPeak.map(x=>x.summary.p99_latency_peak)) : null,
+    requests_completed: Math.max(...S.map(x=>x.summary.requests_completed)),
+    requests_failed: Math.min(...S.map(x=>x.summary.requests_failed)),
+    p50_latency: Math.min(...S.map(x=>x.summary.p50_latency)),
+  };
+  const nMatch = S.filter(x=>matches(x.summary,T)).length;
+
+  // ---- verdict strip
+  const v = el('div',{className:'verdict'});
+  const noFail = S.filter(x=>x.summary.requests_failed===0 && x.summary.requests_dropped===0);
+  v.innerHTML =
+    `<div><span class="verdict-n ${nMatch?'hit':''}">${nMatch}/${S.length}</span>
+       <span class="cap">runs reproduce the observed shape<br>(p50 ${T.p50[0]}–${T.p50[1]}s, p99 peak ${T.p99_peak[0]}–${T.p99_peak[1]}s)</span></div>
+     <div><span class="verdict-n">${best.p99_latency_peak==null?'—':f(best.p99_latency_peak,1)+'s'}</span>
+       <span class="cap">best slowest-1-in-100 at peak<br>across these runs</span></div>
+     <div><span class="verdict-n">${Math.round(best.requests_completed).toLocaleString()}</span>
+       <span class="cap">most calls completed<br>by any run here</span></div>
+     <div><span class="verdict-n">${noFail.length}/${S.length}</span>
+       <span class="cap">runs finished with<br>zero failures or drops</span></div>`;
+  out.append(v);
+
+  // ---- table
+  const c1 = el('div',{className:'card'});
+  c1.append(el('h2',{textContent:'Every run, side by side'}));
+  c1.append(el('p',{className:'note',
+    textContent:'Green marks the best value in that column. "Matches" means this run reproduces the latency shape we actually observe in production — a candidate is only a viable explanation if some run does.'}));
+  const wrap = el('div',{className:'scroll'});
+  const t = el('table');
+  t.innerHTML = `<thead><tr>
+      <th>Run<small>policy / retries</small></th>
+      <th>Typical<small>p50, seconds</small></th>
+      <th>Worst 1%<small>p99 at peak, s</small></th>
+      <th>Completed<small>calls finished</small></th>
+      <th>Failed<small>gave up</small></th>
+      <th>Dropped<small>shed by policy</small></th>
+      <th>Attempts<small>per success</small></th>
+      <th>Reuse<small>cache hit rate</small></th>
+      <th>Headroom left<small>calls / text / output</small></th>
+      <th></th></tr></thead>`;
+  const tb = el('tbody');
+  S.forEach((x,i)=>{
+    const m = x.summary, h = m.min_headroom, ok = matches(m,T);
+    const g = (val,key,d=2)=> `<td class="${val===best[key]?'good':''}">${f(val,d)}</td>`;
+    const hd = k => `<span style="color:${h[k]<0.05?G('--stop'):(h[k]<0.4?G('--warn'):G('--muted'))}">${f(h[k])}</span>`;
+    const row = el('tr');
+    row.innerHTML =
+      `<td class="name"><span class="swatch" style="background:${G(PAL[i%6])}"></span>${x.policy} / ${x.retries}</td>` +
+      g(m.p50_latency,'p50_latency') +
+      (m.peak_requests>0 ? g(m.p99_latency_peak,'p99_latency_peak')
+        : `<td title="this run contained no busy period">—</td>`) +
+      `<td class="${m.requests_completed===best.requests_completed?'good':''}">${Math.round(m.requests_completed).toLocaleString()}</td>` +
+      `<td class="${m.requests_failed===best.requests_failed?'good':(m.requests_failed>0?'bad':'')}">${Math.round(m.requests_failed).toLocaleString()}</td>` +
+      `<td class="${m.requests_dropped>0?'warn':''}">${Math.round(m.requests_dropped).toLocaleString()}</td>` +
+      `<td>${f(m.retry_amplification)}</td>` +
+      `<td>${f(m.cache_hit_rate)}</td>` +
+      `<td>${hd('requests')} / ${hd('input_tokens')} / ${hd('output_tokens')}</td>` +
+      `<td>${ok?'<span class="badge match">matches</span>':''}</td>`;
+    tb.append(row);
+  });
+  t.append(tb); wrap.append(t); c1.append(wrap); out.append(c1);
+
+  // ---- trade-off scatter (the actual policy-choosing view)
+  out.append(tradeoff(S));
+
+  // ---- headroom
+  const c3 = el('div',{className:'card'});
+  c3.append(el('h2',{textContent:'Budget remaining, over time'}));
+  c3.append(el('p',{className:'note',
+    textContent:'1.0 is untouched, 0.0 is empty. Whichever line reaches the floor is the limit actually binding. This is the view a requests-per-minute dashboard cannot give you.'}));
+  const lg = el('div',{className:'legend'});
+  ['calls','text (input tokens)','output tokens'].forEach((n,i)=>
+    lg.insertAdjacentHTML('beforeend',`<span><i style="background:${G(PAL[i])}"></i>${n}</span>`));
+  c3.append(lg);
+  S.forEach((x,i)=>{
+    const lab = el('div',{className:'runlabel'});
+    lab.innerHTML = `<span class="swatch" style="background:${G(PAL[i%6])}"></span>${x.label}`;
+    c3.append(lab);
+    c3.append(el('div',{innerHTML: headroom(x.samples)}));
+  });
+  out.append(c3);
+
+  // ---- latency
+  out.append(latency(S,T));
+}
+
+function tradeoff(S){
+  const c = el('div',{className:'card'});
+  c.append(el('h2',{textContent:'The trade-off: work completed against worst-case wait'}));
+  c.append(el('p',{className:'note',
+    textContent:'There is no single best policy. Down and to the right is better — more work finished, shorter worst-case wait. Filled points are the ones nothing else beats on both axes at once; those are your real choices, and picking between them is a judgement about whether slow or failed is worse for the agent in question.'}));
+  const W=880,H=300,P={l:56,r:130,t:16,b:44};
+  const xs=S.map(s=>s.summary.requests_completed), ys=S.map(s=>Math.max(s.summary.p99_latency_peak,0.4));
+  const x0=Math.min(...xs)*0.94, x1=Math.max(...xs)*1.03;
+  const lo=Math.log10(Math.min(...ys)*0.8), hi=Math.log10(Math.max(...ys)*1.3);
+  const sx=v=>P.l+((v-x0)/Math.max(x1-x0,1e-9))*(W-P.l-P.r);
+  const sy=v=>P.t+(1-(Math.log10(Math.max(v,0.4))-lo)/Math.max(hi-lo,1e-9))*(H-P.t-P.b);
+  // Pareto front: not dominated on (more completed, lower p99)
+  const front = S.map((s,i)=> !S.some((o,j)=> j!==i
+    && o.summary.requests_completed >= s.summary.requests_completed
+    && o.summary.p99_latency_peak <= s.summary.p99_latency_peak
+    && (o.summary.requests_completed > s.summary.requests_completed
+        || o.summary.p99_latency_peak < s.summary.p99_latency_peak)));
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Completed calls against worst-case wait for each policy">`;
+  const ticks=[1,3,10,30,100,300].filter(v=>Math.log10(v)>=lo-0.3 && Math.log10(v)<=hi+0.3);
+  ticks.forEach(v=>{ g+=`<line x1="${P.l}" y1="${sy(v)}" x2="${W-P.r}" y2="${sy(v)}" stroke="${G('--line-soft')}"/>`
+    +`<text x="${P.l-9}" y="${sy(v)+4}" text-anchor="end" fill="${G('--muted')}" font-size="10.5" font-family="${G('--data')}">${v}s</text>`; });
+  // Runs landing on the same point are merged rather than overprinted. Identical
+  // results across retry depths is a real finding, not a rendering accident: once
+  // admission control removes the 429s, retries never fire and depth stops mattering.
+  const groups = new Map();
+  S.forEach((s,i)=>{
+    const X=sx(s.summary.requests_completed), Y=sy(Math.max(s.summary.p99_latency_peak,0.4));
+    const k = `${X.toFixed(0)}:${Y.toFixed(0)}`;
+    if(!groups.has(k)) groups.set(k, {X, Y, runs:[], idx:i, front:false});
+    const gr = groups.get(k);
+    gr.runs.push(s); gr.front = gr.front || front[i];
+  });
+  // Place markers, then de-collide the labels. Mono type makes the width
+  // estimate exact enough to test overlap before drawing; a nudged label keeps
+  // a leader line so it still reads as belonging to its point.
+  const CW=6.35, LH=17;
+  const items=[...groups.values()].map(gr=>{
+    const byPolicy=new Map();
+    gr.runs.forEach(s=>{ byPolicy.set(s.policy,[...(byPolicy.get(s.policy)||[]), s.retries]); });
+    const label=[...byPolicy].map(([p,rs])=>`${p}/${rs.join(',')}`).join(' + ');
+    return {...gr, label, col:G(PAL[gr.idx%6]), flip: gr.X > W-P.r-160};
+  }).sort((a,b)=>a.Y-b.Y);
+
+  const placed=[];
+  items.forEach(it=>{
+    const w=it.label.length*CW, gap=13;
+    const x0=it.flip ? it.X-gap-w : it.X+gap;
+    for(const dy of [0,-LH,LH,-2*LH,2*LH,-3*LH,3*LH]){
+      const box={l:x0-3, r:x0+w+3, t:it.Y+dy-9, b:it.Y+dy+7};
+      const clash=placed.some(q=>box.l<q.r&&q.l<box.r&&box.t<q.b&&q.t<box.b);
+      if(!clash || dy===3*LH){ it.dy=dy; placed.push(box); break; }
+    }
+  });
+
+  items.forEach(it=>{
+    const r0=it.front?7:5;
+    g+=`<circle cx="${it.X.toFixed(1)}" cy="${it.Y.toFixed(1)}" r="${r0}" fill="${it.front?it.col:'none'}" stroke="${it.col}" stroke-width="2"/>`;
+    if(it.runs.length>1)
+      g+=`<circle cx="${it.X.toFixed(1)}" cy="${it.Y.toFixed(1)}" r="${r0+4}" fill="none" stroke="${it.col}" stroke-width="1" opacity=".45"/>`;
+    if(it.dy)
+      g+=`<line x1="${(it.X+(it.flip?-r0-2:r0+2)).toFixed(1)}" y1="${it.Y.toFixed(1)}" x2="${(it.X+(it.flip?-11:11)).toFixed(1)}" y2="${(it.Y+it.dy).toFixed(1)}" stroke="${it.col}" stroke-width="1" opacity=".5"/>`;
+    g+=`<text x="${(it.X+(it.flip?-13:13)).toFixed(1)}" y="${(it.Y+it.dy+4).toFixed(1)}" text-anchor="${it.flip?'end':'start'}" fill="${G('--mid')}" font-size="10.5" font-family="${G('--data')}">${it.label}</text>`;
+  });
+  g+=`<text x="${P.l}" y="${H-10}" fill="${G('--muted')}" font-size="10.5" font-family="${G('--data')}">FEWER CALLS COMPLETED</text>`;
+  g+=`<text x="${W-P.r}" y="${H-10}" text-anchor="end" fill="${G('--muted')}" font-size="10.5" font-family="${G('--data')}">MORE COMPLETED &rarr;</text>`;
+  g+=`<text x="14" y="${P.t+6}" fill="${G('--muted')}" font-size="10.5" font-family="${G('--data')}">SLOWER</text>`;
+  g+='</svg>';
+  c.append(el('div',{innerHTML:g}));
+  const names = S.filter((_,i)=>front[i]).map(s=>`${s.policy}/${s.retries}`);
+  const merged = [...groups.values()].filter(gr=>gr.runs.length>1).length;
+  c.append(el('div',{className:'pareto-note',
+    textContent:`Not beaten on both axes: ${names.join('   ·   ')}`
+      + (merged ? `   —   ${merged} point${merged>1?'s':''} covers runs with identical results (a double ring); where admission control removes the refusals, retry depth changes nothing.` : '')}));
+  return c;
+}
+
+function headroom(samples){
+  const W=880,H=118,P={l:38,r:12,t:10,b:16};
+  const keys=['headroom_requests','headroom_input_tokens','headroom_output_tokens'];
+  const xmax=Math.max(...samples.map(p=>p.t),1);
+  const sx=t=>P.l+(t/xmax)*(W-P.l-P.r), sy=v=>P.t+(1-v)*(H-P.t-P.b);
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Remaining budget for each limiter over time">`;
+  [0,1].forEach(v=>{ g+=`<line x1="${P.l}" y1="${sy(v)}" x2="${W-P.r}" y2="${sy(v)}" stroke="${v?G('--line-soft'):G('--stop')}" ${v?'':'stroke-dasharray="3 4" opacity=".55"'}/>`
+    +`<text x="6" y="${sy(v)+4}" fill="${G('--muted')}" font-size="10" font-family="${G('--data')}">${v.toFixed(1)}</text>`; });
+  keys.forEach((k,i)=>{
+    const d=samples.map((p,j)=>`${j?'L':'M'}${sx(p.t).toFixed(1)},${sy(p[k]).toFixed(1)}`).join('');
+    g+=`<path d="${d}" fill="none" stroke="${G(PAL[i])}" stroke-width="1.7" stroke-linejoin="round"/>`;
+  });
+  return g+'</svg>';
+}
+
+function latency(S,T){
+  const c=el('div',{className:'card'});
+  c.append(el('h2',{textContent:'Latency distribution against what we observe'}));
+  c.append(el('p',{className:'note',
+    textContent:'Log scale. The two ringed marks are production: a typical call around 1s, and the slowest 1 in 100 at peak around 40s. A run is a viable explanation only if its curve passes near both.'}));
+  const lg=el('div',{className:'legend'});
+  S.forEach((s,i)=>lg.insertAdjacentHTML('beforeend',`<span><i style="background:${G(PAL[i%6])}"></i>${s.label}</span>`));
+  c.append(lg);
+  const W=880,H=270,P={l:50,r:14,t:14,b:30};
+  const lo=Math.log10(0.3), hi=Math.log10(400);
+  const sx=q=>P.l+q*(W-P.l-P.r), sy=v=>P.t+(1-(Math.log10(Math.max(v,0.3))-lo)/(hi-lo))*(H-P.t-P.b);
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Latency distribution for each run">`;
+  [0.3,1,3,10,40,120,400].forEach(v=>{ g+=`<line x1="${P.l}" y1="${sy(v)}" x2="${W-P.r}" y2="${sy(v)}" stroke="${G('--line-soft')}"/>`
+    +`<text x="8" y="${sy(v)+4}" fill="${G('--muted')}" font-size="10" font-family="${G('--data')}">${v}s</text>`; });
+  [[0.5,1,'observed typical'],[0.99,40,'observed worst 1%']].forEach(([q,v,lab])=>{
+    g+=`<circle cx="${sx(q)}" cy="${sy(v)}" r="5" fill="none" stroke="${G('--ink')}" stroke-width="1.6"/>`
+      +`<text x="${sx(q)+9}" y="${sy(v)-8}" fill="${G('--ink')}" font-size="10.5" font-family="${G('--data')}">${lab}</text>`;
+  });
+  S.forEach((s,i)=>{
+    const d=s.latency_cdf.map((p,j)=>`${j?'L':'M'}${sx(p.q).toFixed(1)},${sy(p.v).toFixed(1)}`).join('');
+    g+=`<path d="${d}" fill="none" stroke="${G(PAL[i%6])}" stroke-width="2" stroke-linejoin="round"/>`;
+  });
+  [0,0.25,0.5,0.75,0.9,0.99,1].forEach(q=>
+    g+=`<text x="${sx(q)}" y="${H-8}" text-anchor="middle" fill="${G('--muted')}" font-size="10" font-family="${G('--data')}">p${Math.round(q*100)}</text>`);
+  c.append(el('div',{innerHTML:g+'</svg>'}));
+  return c;
+}
+boot();
+</script>
+</body>
+</html>
