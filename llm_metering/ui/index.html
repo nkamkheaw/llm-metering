@@ -47,27 +47,12 @@
 
   /* ---- shell ---- */
   .topbar{border-bottom:1px solid var(--line);background:var(--panel);
-    padding:18px 30px;display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
-  .topbar h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-0.02em}
-  .topbar .sub{font-size:14.5px;color:var(--muted);max-width:62ch}
+    padding:13px 30px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .topbar h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-0.02em;white-space:nowrap}
+  .topbar .sub{font-size:14px;color:var(--muted);flex:1;min-width:180px}
   .topbar a{color:var(--stop);font-family:var(--data);font-size:12px;text-decoration:none;
-    border-bottom:1px solid transparent;margin-left:auto;white-space:nowrap}
+    border-bottom:1px solid transparent;white-space:nowrap}
   .topbar a:hover{border-bottom-color:var(--stop)}
-  /* ---- context band ---- */
-  .context{border-bottom:1px solid var(--line);background:var(--panel-3);
-    display:grid;grid-template-columns:1fr 300px;gap:44px;padding:24px 30px 26px}
-  @media (max-width:920px){.context{grid-template-columns:1fr;gap:24px}}
-  .context p{margin:9px 0 0;font-size:15px;line-height:1.58;color:var(--mid);max-width:74ch}
-  .context .ctx-how{margin-top:12px;font-size:14.5px}
-  .context b{color:var(--ink);font-weight:600}
-  .obs{display:flex;gap:26px;margin-top:11px;flex-wrap:wrap}
-  .obs div{min-width:78px}
-  .obs b{display:block;font-family:var(--display);font-size:23px;font-weight:600;
-    line-height:1.1;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:var(--stop)}
-  .obs span{display:block;font-family:var(--data);font-size:10.5px;color:var(--muted);
-    margin-top:5px;line-height:1.4;letter-spacing:.02em}
-  .ctx-warn{font-family:var(--data);font-size:11.5px!important;line-height:1.65!important;
-    color:var(--muted);margin-top:16px!important;padding-top:13px;border-top:1px solid var(--line)}
   .app{display:grid;grid-template-columns:308px 1fr;align-items:start}
   @media (max-width:920px){.app{grid-template-columns:1fr}
     aside{border-right:0!important;border-bottom:1px solid var(--line);position:static!important}}
@@ -154,21 +139,36 @@
   svg{display:block;width:100%;height:auto}
   .runlabel{font-family:var(--data);font-size:11.5px;color:var(--muted);margin:16px 0 4px;
     letter-spacing:.03em;display:flex;align-items:center;gap:8px}
-  .viewbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
-    padding:11px 30px;border-bottom:1px solid var(--line);background:var(--panel);
+  .viewbar{display:flex;align-items:center;gap:12px;
+    padding:9px 30px;border-bottom:1px solid var(--line);background:var(--panel);
     font-family:var(--data);font-size:11.5px;letter-spacing:.03em;color:var(--muted)}
   .viewbar .pill{padding:3px 10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
-    font-size:10px;font-family:var(--display)}
+    font-size:10px;font-family:var(--display);white-space:nowrap;flex-shrink:0}
   .viewbar .pill.prod{background:var(--stop-soft);color:var(--stop)}
   .viewbar .pill.custom{background:var(--panel-2);color:var(--mid)}
-  .viewbar .what{color:var(--mid)}
-  .viewbar .acts{margin-left:auto;display:flex;gap:8px}
+  .viewbar .what{color:var(--mid);flex:1;min-width:0}
+  .viewbar .acts{display:flex;gap:8px;flex-shrink:0}
   .viewbar button{font-family:var(--data);font-size:11px;letter-spacing:.03em;
     background:var(--panel);color:var(--mid);border:1px solid var(--line);padding:5px 12px;
-    cursor:pointer}
+    cursor:pointer;white-space:nowrap}
   .viewbar button:hover{border-color:var(--muted);color:var(--ink)}
   .viewbar button:focus-visible{outline:2px solid var(--stop);outline-offset:2px}
   .viewbar button.ok{border-color:var(--ok);color:var(--ok)}
+  @media (max-width:820px){.viewbar{flex-wrap:wrap}.viewbar .what{flex-basis:100%;order:3}}
+
+  /* One line of reference numbers rather than a two-column block. The narrative
+     behind it is read once; the numbers are consulted constantly. */
+  .facts{display:flex;align-items:center;gap:0 22px;flex-wrap:wrap;
+    padding:11px 30px;border-bottom:1px solid var(--line);background:var(--panel-3)}
+  .facts .eyebrow{flex-shrink:0}
+  .ob{font-family:var(--body);font-size:14px;color:var(--muted);white-space:nowrap}
+  .ob b{font-family:var(--display);font-size:19px;font-weight:600;color:var(--stop);
+    letter-spacing:-0.02em;margin-right:5px;font-variant-numeric:tabular-nums}
+  .facts .note-inline{font-family:var(--data);font-size:11px;color:var(--muted);
+    margin-left:auto;text-align:right}
+  .facts .help{flex-basis:100%;margin-top:10px}
+  .facts .help p{margin:0 0 10px;max-width:78ch}
+  .facts .help p:last-child{margin-bottom:0}
   .status{font-family:var(--data);font-size:11px;color:var(--muted);margin-top:11px;
     line-height:1.6;letter-spacing:.02em}
   .status b{color:var(--ink);font-weight:600}
@@ -217,19 +217,18 @@
   </span>
 </div>
 
-<section class="context">
-  <div>
-    <span class="eyebrow">What we are investigating</span>
+<section class="facts">
+  <span class="eyebrow">Observed</span>
+  <span class="ob"><b>1s</b> typical call</span>
+  <span class="ob"><b>40s</b> slowest 1 in 100, at peak</span>
+  <span class="ob"><b>10%</b> of minutes are spikes</span>
+  <button type="button" class="helpbtn" id="helpAboutBtn" aria-expanded="false"
+          aria-controls="helpAbout" title="What is being investigated?">?</button>
+  <span class="note-inline">Simulated against published limits &mdash; not measured in production</span>
+  <div class="help" id="helpAbout" role="region">
     <p>Several hundred agents share one provider quota through the same SDK. Load is flat most of the time and spikes during work hours. Our dashboard tracks requests per minute and shows plenty of headroom even at peak &mdash; yet the slowest calls take around forty seconds. Something is throttling us that the dashboard cannot see.</p>
-  </div>
-  <div>
-    <span class="eyebrow">Observed in production</span>
-    <div class="obs">
-      <div><b>1s</b><span>typical call</span></div>
-      <div><b>40s</b><span>slowest 1 in 100, at peak</span></div>
-      <div><b>10%</b><span>of minutes are spikes</span></div>
-    </div>
-    <p class="ctx-warn">Simulated against the provider&rsquo;s published rate-limit and caching rules. No production telemetry is wired in yet, so results narrow the candidates and say what to measure &mdash; they do not name the cause.</p>
+    <p>A run <b>matches</b> when it reproduces both observed numbers at once. Hitting either alone is easy and means nothing; the pairing is the bar a candidate has to clear to stay believable.</p>
+    <p>Everything here is simulated against the provider&rsquo;s published rate-limit and caching rules. No production telemetry is wired in yet, so results narrow the candidates and say what to measure &mdash; they do not name the cause.</p>
   </div>
 </section>
 
@@ -351,12 +350,15 @@ function updateViewBar(){
   const pill = document.getElementById('viewPill'), what = document.getElementById('viewWhat');
   pill.textContent = prod ? 'Production today' : 'Custom view';
   pill.className = `pill ${prod?'prod':'custom'}`;
+  // Kept to one line: this is a status bar, and a paragraph here pushed the
+  // controls down the page. The "not confirmed" caveat stays -- it is the part
+  // that stops a default reading as a conclusion.
   what.innerHTML = prod
-    ? `No scheduler, ${P.retries[0]} attempts per call &mdash; how the platform runs right now. `
+    ? `No scheduler, ${P.retries[0]} attempts per call. `
       + (P.matched
-        ? `Shown against <b>${cur().label.toLowerCase()}</b>, the closest of ${P.n_candidates} candidates that reproduce what we see &mdash; closest, not confirmed.`
+        ? `Against <b>${cur().label.toLowerCase()}</b> &mdash; closest of ${P.n_candidates} candidates, not confirmed.`
         : '')
-    : 'Changed from the production baseline. The link updates as you go &mdash; copy it to share this exact view.';
+    : 'Changed from the baseline &mdash; the link updates as you go, copy it to share.';
 }
 
 // Only simulations that are not already computed cost anything.
@@ -474,7 +476,7 @@ function buildHelp(){
   const pol = document.getElementById('helpPolicy');
   pol.innerHTML = '<dl>' + META.policies.map(k =>
     `<dt>${k}</dt><dd>${(META.policy_help||{})[k] || ''}</dd>`).join('') + '</dl>';
-  wireHelp('helpScenario'); wireHelp('helpPolicy');
+  wireHelp('helpScenario'); wireHelp('helpPolicy'); wireHelp('helpAbout');
   refreshScenarioHelp();
 }
 

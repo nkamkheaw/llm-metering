@@ -171,3 +171,17 @@ def test_the_matches_bar_is_stated_where_the_badge_appears():
     assert "How to use this" not in html, "the filler paragraph should be gone"
     assert "BOTH observed numbers at once" in src
     assert "Hitting either alone is easy" in src
+
+
+def test_header_stays_compact():
+    """The header once ran to ~500px -- 45% of a laptop screen before a single
+    control. It is three single-line bands now, with the narrative behind a "?".
+    """
+    html = (UI / "index.html").read_text()
+    assert 'class="facts"' in html, "reference numbers belong in one compact band"
+    assert 'id="helpAbout"' in html, "the narrative belongs behind a toggle"
+    assert 'class="context"' not in html, "the tall two-column block should be gone"
+    src = script_of("index.html")
+    # The status bar must not grow back into a paragraph.
+    assert "how the platform runs right now" not in src
+    assert "not confirmed" in src, "the caveat that stops a default reading as a conclusion stays"
