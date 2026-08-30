@@ -155,13 +155,28 @@
   .status{font-family:var(--data);font-size:11px;color:var(--muted);margin-top:11px;
     line-height:1.6;letter-spacing:.02em}
   .status b{color:var(--ink);font-weight:600}
-  .status.manual{color:var(--warn)}
   button.run.auto{background:var(--panel);color:var(--mid);border:1px solid var(--line)}
   button.run.auto:hover{border-color:var(--muted);filter:none}
   main.busy{opacity:.75}
-  main.stale{opacity:.5}
-  .stalebar{font-family:var(--data);font-size:11.5px;letter-spacing:.03em;color:var(--warn);
-    background:var(--warn-soft);border:1px solid var(--line);padding:10px 14px;margin-bottom:16px}
+  /* Progress lives with the results, not only in the sidebar: the eye is on the
+     table while rows arrive, and a status line off to the side goes unread. */
+  .progress{display:flex;align-items:center;gap:14px;background:var(--panel);
+    border:1px solid var(--line);border-left:3px solid var(--stop);
+    padding:12px 18px;margin-bottom:20px;font-family:var(--data);font-size:12px;
+    color:var(--mid);letter-spacing:.03em}
+  .progress .bar{flex:1;height:5px;background:var(--panel-2);overflow:hidden;min-width:80px}
+  .progress .bar i{display:block;height:100%;background:var(--stop);transition:width .3s ease-out}
+  .progress b{color:var(--ink);font-weight:600}
+  .spin{display:inline-block;width:11px;height:11px;border:2px solid var(--line);
+    border-top-color:var(--stop);border-radius:50%;vertical-align:-1px;
+    animation:spin .7s linear infinite;flex-shrink:0}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  tr.pending td{color:var(--muted)}
+  tr.pending td.name{color:var(--mid)}
+  tr.pending .spin{margin-right:9px}
+  /* With motion reduced the spinner cannot convey activity, so the wording
+     carries it instead -- the row still says what it is waiting for. */
+  @media (prefers-reduced-motion:reduce){.spin{animation:none;opacity:.9}}
   .empty{padding:60px 20px;text-align:center;color:var(--muted);font-size:15px;
     border:1px dashed var(--line);background:var(--panel)}
   .pareto-note{font-family:var(--data);font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.6}
@@ -246,10 +261,13 @@ let META=null, sel={policies:new Set(['none']), retries:new Set([3])}, LAST=null
 // host speed factor the SERVER measures from real runs -- a laptop sits near
 // 1.0, this App Service instance around 11. Estimating from a hardcoded local
 // timing would promise instant updates the host cannot deliver.
-// Results stream in one simulation at a time, so a longer job shows its first
-// row within seconds rather than freezing. That makes a much larger budget
-// reasonable than when the whole batch had to finish before anything appeared.
-const AUTO_BUDGET = 25.0;
+// There is no auto-run cap. One existed when the whole batch had to finish
+// before anything appeared, so a long selection meant a frozen page. Now rows
+// stream in one at a time and a superseded run is aborted -- measured, the
+// server finishes the simulation already in flight and then stops, wasting one
+// rather than the whole batch. A cap would be protecting against nothing.
+// The estimate is still shown, so a long run is chosen knowingly.
+const DEBOUNCE_MS = 400;
 let timer = null, inflight = null, COST = 3.0;
 
 // Results are deterministic and cached server-side (and partly precomputed and
@@ -330,31 +348,26 @@ const estimate = () => uncachedCount() *
 function updateStatus(){
   const n = sel.policies.size * sel.retries.size, est = estimate();
   const box = document.getElementById('status'), btn = document.getElementById('go');
-  const auto = est <= AUTO_BUDGET;
-  box.classList.toggle('manual', !auto);
-  btn.classList.toggle('auto', auto);
-  btn.textContent = auto ? 'Re-run' : `Run ${n} simulations`;
+  btn.classList.add('auto');
+  btn.textContent = 'Re-run';
   const todo = uncachedCount(), ready = n - todo;
   box.innerHTML = todo === 0
     ? `<b>${n}</b> simulation${n>1?'s':''} &middot; <b>already computed</b><br>Shown from cache, instantly.`
-    : auto
-    ? `<b>${n}</b> simulation${n>1?'s':''}` + (ready ? ` &middot; ${ready} already computed` : '')
-      + ` &middot; about <b>${est.toFixed(1)}s</b><br>Updates on its own as you change options.`
     : `<b>${todo}</b> new simulation${todo>1?'s':''}` + (ready ? ` (${ready} cached)` : '')
-      + ` &middot; about <b>${est.toFixed(0)}s</b><br>Too slow to run on every change &mdash; press the button.`;
-  return auto;
+      + ` &middot; about <b>${est < 10 ? est.toFixed(1) : est.toFixed(0)}s</b>`
+      + `<br>Runs on its own; rows appear as they finish.`;
 }
 
 function schedule(){
   writeURL();
   clearTimeout(timer);
   // Any in-flight run belongs to the previous selection. Letting it land would
-  // paint results that no longer match the controls, which is worse than no
-  // results at all -- so it is cancelled either way.
+  // paint results that no longer match the controls. Aborting is cheap: the
+  // server stops after the simulation it is already running.
   if (inflight){ inflight.abort(); inflight = null;
     document.getElementById('out').classList.remove('busy'); }
-  if (updateStatus()) timer = setTimeout(run, 260);   // debounce rapid clicking
-  else markStale();
+  updateStatus();
+  timer = setTimeout(run, DEBOUNCE_MS);
 }
 
 function showProgress(done, total, t0){
@@ -367,15 +380,6 @@ function showProgress(done, total, t0){
     + `<br>Results appear as each finishes.`;
 }
 
-function markStale(){
-  const main = document.getElementById('out');
-  if (!main.querySelector('.verdict')) return;        // nothing shown yet
-  main.classList.add('stale');
-  if (!main.querySelector('.stalebar'))
-    main.insertBefore(Object.assign(document.createElement('div'),
-      {className:'stalebar',
-       textContent:'Showing the previous selection. Press Run to update.'}), main.firstChild);
-}
 
 async function boot(){
   META = await (await fetch('/api/scenarios')).json();
@@ -474,6 +478,12 @@ async function run(){
     const reader = res.body.getReader(), dec = new TextDecoder();
     let buf = '', series = [], total = 0, t0 = performance.now();
     LAST = { scenario: body.scenario, param: body.param, series };
+    // The server walks policies then retries; mirroring that order here lets the
+    // table name the runs that have not arrived yet, rather than just spinning.
+    const plan = [];
+    for (const pl of body.policies) for (const rt of body.retries)
+      plan.push({policy: pl, retries: rt});
+    render(LAST, plan);
 
     for(;;){
       const {value, done} = await reader.read();
@@ -489,7 +499,7 @@ async function run(){
         else if (msg.type === 'sim'){
           series.push(msg.entry);
           seen.add(msg.key);
-          render(LAST);
+          render(LAST, plan.slice(series.length));
           showProgress(msg.index, total, t0);
         }
       }
@@ -510,9 +520,21 @@ const matches = (m,T)=> m.peak_requests>0
   && m.p50_latency>=T.p50[0] && m.p50_latency<=T.p50[1]
   && m.p99_latency_peak>=T.p99_peak[0] && m.p99_latency_peak<=T.p99_peak[1];
 
-function render(r){
+function render(r, pending){
   const out = document.getElementById('out');
-  out.classList.remove('stale'); out.innerHTML='';
+  out.innerHTML='';
+  pending = pending || [];
+
+  // Banner first, so "more is coming" is the first thing read.
+  if (pending.length){
+    const total = r.series.length + pending.length, done = r.series.length;
+    const bar = el('div',{className:'progress'});
+    bar.innerHTML = `<span class="spin"></span>`
+      + `<span>Running <b>${done + 1}</b> of <b>${total}</b></span>`
+      + `<span class="bar"><i style="width:${done / total * 100}%"></i></span>`
+      + `<span><b>${pending.length}</b> still to come</span>`;
+    out.append(bar);
+  }
   const T = META.target, S = r.series;
 
   // ---- best-on-axis (there is no single best policy; each axis has its own)
@@ -576,6 +598,14 @@ function render(r){
       `<td>${f(m.cache_hit_rate)}</td>` +
       `<td>${hd('requests')} / ${hd('input_tokens')} / ${hd('output_tokens')}</td>` +
       `<td>${ok?'<span class="badge match">matches</span>':''}</td>`;
+    tb.append(row);
+  });
+  pending.forEach((pd, i) => {
+    const row = el('tr',{className:'pending'});
+    row.innerHTML = `<td class="name">${i === 0 ? '<span class="spin"></span>' : ''}`
+      + `${pd.policy} / ${pd.retries}</td>`
+      + '<td>—</td>'.repeat(8)
+      + `<td style="text-align:left">${i === 0 ? 'computing…' : 'queued'}</td>`;
     tb.append(row);
   });
   t.append(tb); wrap.append(t); c1.append(wrap); out.append(c1);

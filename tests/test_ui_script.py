@@ -73,11 +73,11 @@ def test_module_globals_are_declared(page):
     # Identifiers this app defines for itself. Browser and standard-library
     # globals are deliberately not listed -- those are not what breaks.
     app_globals = {
-        "index.html": ["META", "sel", "LAST", "COST", "seen", "simKey", "selectedKeys", "uncachedCount", "AUTO_BUDGET",
+        "index.html": ["META", "sel", "LAST", "COST", "seen", "simKey", "selectedKeys", "uncachedCount",
                        "timer", "inflight", "estimate", "schedule", "run", "render",
                        "boot", "chips", "cur", "onScenario", "applyState", "copyLink",
                        "readURL", "writeURL", "isProduction", "updateViewBar",
-                       "updateStatus", "markStale", "showProgress", "tradeoff", "headroom", "latency",
+                       "updateStatus", "showProgress", "DEBOUNCE_MS", "tradeoff", "headroom", "latency",
                        "PAL", "G", "el", "f", "matches"],
         "overview.html": ["PALETTE", "G", "pct", "render", "timeline"],
     }[page]
@@ -116,4 +116,35 @@ def test_explorer_renders_incrementally():
     src = script_of("index.html")
     assert "/api/run/stream" in src
     assert "getReader()" in src, "must consume the response as a stream"
-    assert src.count("render(LAST)") >= 2, "must repaint per simulation, not only at the end"
+    assert src.count("render(LAST") >= 2, "must repaint per simulation, not only at the end"
+
+
+def test_explorer_shows_what_is_still_running():
+    """While streaming, the page must say more is coming and name what.
+
+    Progress only in the sidebar goes unread: the eye is on the table where the
+    rows are appearing.
+    """
+    src = script_of("index.html")
+    css = (UI / "index.html").read_text()
+    assert "still to come" in src, "must state how many runs are outstanding"
+    assert "computing…" in src, "the in-flight run must be labelled"
+    assert "class=\"progress\"" in src or "className:'progress'" in src
+    assert ".spin{" in css, "needs an activity indicator"
+    assert "prefers-reduced-motion" in css and ".spin{animation:none" in css, \
+        "a spinner that cannot animate must still read as pending"
+    assert "plan.slice(series.length)" in src, \
+        "pending rows must be derived from what has not arrived yet"
+
+
+def test_no_auto_run_cap_remains():
+    """Streaming plus abort-on-change removed the reason for a cap.
+
+    Measured: a client disconnect stops the server after the simulation already
+    in flight, so a superseded selection wastes one simulation rather than the
+    whole batch. Gating behind a button would protect against nothing.
+    """
+    src = script_of("index.html")
+    assert "AUTO_BUDGET" not in src, "the cap should be gone, not just raised"
+    assert "Too slow to run on every change" not in src
+    assert "setTimeout(run, DEBOUNCE_MS)" in src, "every change should still debounce"

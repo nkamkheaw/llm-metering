@@ -84,10 +84,17 @@ freezing until the last one finishes. Each simulation runs in a worker thread,
 so one person's long comparison does not block everyone else's requests — with
 a single worker and a blocking endpoint, it would.
 
-The explorer runs on its own as you change options, debounced ~260ms, when the
-projected cost is under ~25s. Heavier selections wait for an explicit click. An
-in-flight run is aborted whenever the selection changes, so a stale result can
-never be painted under controls it does not match.
+While a batch runs, the results area shows a progress banner and the table
+lists the runs that have not arrived yet by name, one marked `computing…` and
+the rest `queued`. Progress only in the sidebar goes unread: the eye is on the
+table where the rows are appearing.
+
+Every change runs automatically, debounced 400ms — there is no cost cap. One
+existed while the whole batch had to finish before anything appeared, but a
+superseded run is aborted and, measured, the server finishes the simulation
+already in flight and then stops. A cancelled selection costs one simulation,
+not a batch, so gating heavy selections behind a button would protect against
+nothing. The estimate is still shown so a long run is chosen knowingly.
 
 Duration options all cover at least one busy period. Shorter runs would contain
 none, and `p99_latency_peak` would then be 0.0 by construction rather than by
