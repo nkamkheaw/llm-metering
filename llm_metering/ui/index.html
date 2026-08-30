@@ -101,8 +101,15 @@
 
   /* ---- results ---- */
   .card{background:var(--panel);border:1px solid var(--line);padding:22px 24px;margin-bottom:20px}
-  .card h2{margin:0 0 4px;font-size:17px;font-weight:600;letter-spacing:-0.01em}
-  .card .note{margin:0 0 16px;font-size:14px;color:var(--muted);max-width:70ch;line-height:1.5}
+  .card h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-0.01em}
+  /* Title and description side by side. A 70ch paragraph left half a wide card
+     empty, but letting it fill gave ~127 characters a line -- roughly double a
+     comfortable measure. Two columns use the width without lengthening lines. */
+  .card-head{display:flex;gap:34px;align-items:baseline;margin-bottom:16px;flex-wrap:wrap}
+  .card-head h2{flex:0 0 200px}
+  .card .note{margin:0;font-size:14px;color:var(--muted);line-height:1.5;
+    flex:1 1 320px;min-width:0;max-width:88ch}
+  @media (max-width:1050px){.card-head{gap:4px}.card-head h2{flex-basis:100%}}
 
   .verdict{display:flex;gap:0;border:1px solid var(--line);background:var(--panel);margin-bottom:20px;
     flex-wrap:wrap}
@@ -570,6 +577,13 @@ const matches = (m,T)=> m.peak_requests>0
   && m.p50_latency>=T.p50[0] && m.p50_latency<=T.p50[1]
   && m.p99_latency_peak>=T.p99_peak[0] && m.p99_latency_peak<=T.p99_peak[1];
 
+function cardHead(title, note){
+  const head = el('div',{className:'card-head'});
+  head.append(el('h2',{textContent:title}));
+  head.append(el('p',{className:'note',textContent:note}));
+  return head;
+}
+
 function render(r, pending){
   const out = document.getElementById('out');
   out.innerHTML='';
@@ -614,11 +628,10 @@ function render(r, pending){
 
   // ---- table
   const c1 = el('div',{className:'card'});
-  c1.append(el('h2',{textContent:'Every run, side by side'}));
-  c1.append(el('p',{className:'note',
-    textContent:'Green marks the best value in that column. "Matches" means a run reproduces BOTH observed numbers at once — a typical call near '
+  c1.append(cardHead('Every run, side by side',
+    'Green marks the best value in that column. "Matches" means a run reproduces BOTH observed numbers at once — a typical call near '
       + T.p50[0].toFixed(1) + '–' + T.p50[1].toFixed(1) + 's and a worst-1% of '
-      + T.p99_peak[0] + '–' + T.p99_peak[1] + 's. Hitting either alone is easy and means nothing; the pairing is the bar a candidate must clear to stay believable.'}));
+      + T.p99_peak[0] + '–' + T.p99_peak[1] + 's. Hitting either alone is easy and means nothing; the pairing is the bar a candidate must clear to stay believable.'));
   const wrap = el('div',{className:'scroll'});
   const t = el('table');
   t.innerHTML = `<thead><tr>
@@ -667,9 +680,8 @@ function render(r, pending){
 
   // ---- headroom
   const c3 = el('div',{className:'card'});
-  c3.append(el('h2',{textContent:'Budget remaining, over time'}));
-  c3.append(el('p',{className:'note',
-    textContent:'1.0 is untouched, 0.0 is empty. Whichever line reaches the floor is the limit actually binding. This is the view a requests-per-minute dashboard cannot give you.'}));
+  c3.append(cardHead('Budget remaining, over time',
+    '1.0 is untouched, 0.0 is empty. Whichever line reaches the floor is the limit actually binding. This is the view a requests-per-minute dashboard cannot give you.'));
   const lg = el('div',{className:'legend'});
   ['calls','text (input tokens)','output tokens'].forEach((n,i)=>
     lg.insertAdjacentHTML('beforeend',`<span><i style="background:${G(PAL[i])}"></i>${n}</span>`));
@@ -688,9 +700,8 @@ function render(r, pending){
 
 function tradeoff(S){
   const c = el('div',{className:'card'});
-  c.append(el('h2',{textContent:'The trade-off: work completed against worst-case wait'}));
-  c.append(el('p',{className:'note',
-    textContent:'There is no single best policy. Down and to the right is better — more work finished, shorter worst-case wait. Filled points are the ones nothing else beats on both axes at once; those are your real choices, and picking between them is a judgement about whether slow or failed is worse for the agent in question.'}));
+  c.append(cardHead('The trade-off: work completed against worst-case wait',
+    'There is no single best policy. Down and to the right is better — more work finished, shorter worst-case wait. Filled points are the ones nothing else beats on both axes at once; those are your real choices, and picking between them is a judgement about whether slow or failed is worse for the agent in question.'));
   const W=880,H=300,P={l:56,r:130,t:16,b:44};
   const xs=S.map(s=>s.summary.requests_completed), ys=S.map(s=>Math.max(s.summary.p99_latency_peak,0.4));
   const x0=Math.min(...xs)*0.94, x1=Math.max(...xs)*1.03;
@@ -779,9 +790,8 @@ function headroom(samples){
 
 function latency(S,T){
   const c=el('div',{className:'card'});
-  c.append(el('h2',{textContent:'Latency distribution against what we observe'}));
-  c.append(el('p',{className:'note',
-    textContent:'Log scale. The two ringed marks are production: a typical call around 1s, and the slowest 1 in 100 at peak around 40s. A run is a viable explanation only if its curve passes near both.'}));
+  c.append(cardHead('Latency distribution against what we observe',
+    'Log scale. The two ringed marks are production: a typical call around 1s, and the slowest 1 in 100 at peak around 40s. A run is a viable explanation only if its curve passes near both.'));
   const lg=el('div',{className:'legend'});
   S.forEach((s,i)=>lg.insertAdjacentHTML('beforeend',`<span><i style="background:${G(PAL[i%6])}"></i>${s.label}</span>`));
   c.append(lg);

@@ -77,7 +77,7 @@ def test_module_globals_are_declared(page):
                        "timer", "inflight", "estimate", "schedule", "run", "render",
                        "boot", "chips", "cur", "onScenario", "applyState", "copyLink",
                        "readURL", "writeURL", "isProduction", "updateViewBar",
-                       "updateStatus", "showProgress", "DEBOUNCE_MS", "buildHelp", "wireHelp",
+                       "updateStatus", "showProgress", "DEBOUNCE_MS", "buildHelp", "wireHelp", "cardHead",
                        "refreshScenarioHelp", "tradeoff", "headroom", "latency",
                        "PAL", "G", "el", "f", "matches"],
         "overview.html": ["PALETTE", "G", "pct", "render", "timeline"],
@@ -185,3 +185,14 @@ def test_header_stays_compact():
     # The status bar must not grow back into a paragraph.
     assert "how the platform runs right now" not in src
     assert "not confirmed" in src, "the caveat that stops a default reading as a conclusion stays"
+
+
+def test_every_card_uses_the_shared_header():
+    """One helper builds all four card headers, so none drifts back to a
+    narrow paragraph stranded in a wide card."""
+    src = script_of("index.html")
+    css = (UI / "index.html").read_text()
+    assert src.count("cardHead(") >= 5, "helper plus four call sites"
+    assert src.count("el('h2'") == 1, "only the helper should build a card heading"
+    assert ".card-head{display:flex" in css
+    assert "max-width:88ch" in css, "measure must stay bounded on ultra-wide screens"
