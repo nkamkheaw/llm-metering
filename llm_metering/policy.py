@@ -51,6 +51,8 @@ class PolicyConfig:
     accel_floor_rate: float = 2.0
     # Give up rather than queue forever.
     max_wait: float = 120.0
+    # Shown in the UI. Kept beside the behaviour so the two cannot drift apart.
+    description: str = ""
 
 
 @dataclass
@@ -230,11 +232,52 @@ def reconcile(now: float, st: SchedulerState, predicted: float, actual: float) -
 
 # Named policies used by the sweep.
 POLICIES = {
-    "none": PolicyConfig(name="none"),
-    "fifo_backoff": PolicyConfig(name="fifo_backoff", max_wait=120.0),
-    "admission": PolicyConfig(name="admission", admission=True),
-    "admission_cache": PolicyConfig(name="admission_cache", admission=True, cache_gate=True),
+    "none": PolicyConfig(
+        name="none",
+        description=(
+            "No scheduler at all. Every call goes straight to the provider and "
+            "relies on retries when refused. This is how the platform runs today, "
+            "so it is the baseline everything else is measured against."
+        ),
+    ),
+    "fifo_backoff": PolicyConfig(
+        name="fifo_backoff",
+        max_wait=120.0,
+        description=(
+            "Queue in arrival order and back off after a refusal, but never hold a "
+            "call back pre-emptively. Slightly more orderly than no scheduler; it "
+            "still only reacts after the provider has already said no."
+        ),
+    ),
+    "admission": PolicyConfig(
+        name="admission",
+        admission=True,
+        description=(
+            "Track our own budget for calls, input tokens and output tokens, and "
+            "hold a request until its share is available. Refusals largely stop "
+            "happening because we never ask for more than we can have — the cost is "
+            "waiting on our side instead of being turned away."
+        ),
+    ),
+    "admission_cache": PolicyConfig(
+        name="admission_cache",
+        admission=True,
+        cache_gate=True,
+        description=(
+            "Admission control, plus: when many agents start with the same fresh "
+            "prompt, let one through first so the rest can reuse what the provider "
+            "remembers instead of all paying for it at once."
+        ),
+    ),
     "admission_cache_accel": PolicyConfig(
-        name="admission_cache_accel", admission=True, cache_gate=True, accel_guard=True
+        name="admission_cache_accel",
+        admission=True,
+        cache_gate=True,
+        accel_guard=True,
+        description=(
+            "Everything above, plus a limit on how fast our traffic is allowed to "
+            "climb. Aimed at providers that throttle sudden ramps even when the "
+            "totals are well within budget."
+        ),
     ),
 }

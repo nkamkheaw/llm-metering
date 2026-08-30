@@ -86,6 +86,23 @@
   .mech{font-size:13.5px;color:var(--mid);margin-top:10px;padding-left:11px;
     border-left:2px solid var(--stop);line-height:1.5}
   .chips{display:flex;flex-wrap:wrap;gap:6px}
+  /* Explanations sit behind a "?" rather than on the page: needed once, in the
+     way every time after. */
+  .lbl{display:flex;align-items:center;gap:7px}
+  .helpbtn{width:15px;height:15px;flex-shrink:0;border:1px solid var(--line);
+    background:var(--panel);color:var(--muted);font-family:var(--data);font-size:9.5px;
+    line-height:1;cursor:pointer;padding:0;border-radius:50%}
+  .helpbtn:hover,.helpbtn[aria-expanded="true"]{border-color:var(--stop);color:var(--stop)}
+  .helpbtn:focus-visible{outline:2px solid var(--stop);outline-offset:2px}
+  .help{display:none;margin-top:9px;background:var(--panel);border:1px solid var(--line);
+    border-left:3px solid var(--stop);padding:13px 15px;font-size:13.5px;line-height:1.5;
+    color:var(--mid)}
+  .help.open{display:block}
+  .help dt{font-family:var(--data);font-size:11.5px;color:var(--ink);margin-top:11px;
+    letter-spacing:.02em}
+  .help dt:first-of-type{margin-top:0}
+  .help dd{margin:3px 0 0}
+  .help dl{margin:0}
   .chip{font-family:var(--data);font-size:12px;border:1px solid var(--line);background:var(--panel);
     color:var(--mid);padding:5px 11px;cursor:pointer;user-select:none;transition:none}
   .chip:hover{border-color:var(--muted)}
@@ -204,7 +221,6 @@
   <div>
     <span class="eyebrow">What we are investigating</span>
     <p>Several hundred agents share one provider quota through the same SDK. Load is flat most of the time and spikes during work hours. Our dashboard tracks requests per minute and shows plenty of headroom even at peak &mdash; yet the slowest calls take around forty seconds. Something is throttling us that the dashboard cannot see.</p>
-    <p class="ctx-how"><b>How to use this:</b> pick one of five candidate explanations, set the parameter that governs it, and run scheduler policies against it. A run <b>matches</b> when it reproduces both observed numbers at once &mdash; a typical call near 1s <em>and</em> a worst-1% near 40s. That pairing is the bar a candidate has to clear to stay believable; hitting either number alone is easy and means nothing.</p>
   </div>
   <div>
     <span class="eyebrow">Observed in production</span>
@@ -219,16 +235,18 @@
 
 <div class="app">
   <aside>
-    <span class="lbl">Candidate explanation</span>
+    <span class="lbl">Candidate explanation<button type="button" class="helpbtn" id="helpScenarioBtn" aria-expanded="false" aria-controls="helpScenario" title="What do these mean?">?</button></span>
     <select id="scenario" aria-label="Candidate explanation"></select>
     <div class="mech" id="mech"></div>
+    <div class="help" id="helpScenario" role="region"></div>
 
     <span class="lbl" id="paramLabel">Parameter</span>
     <select id="param" aria-label="Governing parameter"></select>
     <div class="hint" id="paramHelp"></div>
 
-    <span class="lbl">Scheduler policy</span>
+    <span class="lbl">Scheduler policy<button type="button" class="helpbtn" id="helpPolicyBtn" aria-expanded="false" aria-controls="helpPolicy" title="What do these mean?">?</button></span>
     <div class="chips" id="policies"></div>
+    <div class="help" id="helpPolicy" role="region"></div>
 
     <span class="lbl">Retry attempts per call</span>
     <div class="chips" id="retries"></div>
@@ -395,6 +413,7 @@ async function boot(){
   document.getElementById('duration').onchange = schedule;
   document.getElementById('go').onclick = run;
   document.getElementById('copyLink').onclick = copyLink;
+  buildHelp();
   document.getElementById('resetView').onclick = ()=>{
     applyState(META.production);
     chips('policies', META.policies, sel.policies);
@@ -440,6 +459,8 @@ function chips(id, vals, set){
   const box = document.getElementById(id); box.innerHTML='';
   vals.forEach(v=>{
     const c = el('button',{className:'chip'+(set.has(v)?' on':''), textContent:String(v), type:'button'});
+    const help = (META.policy_help || {})[v];
+    if (help) c.title = help;
     c.setAttribute('aria-pressed', set.has(v));
     c.onclick = ()=>{ set.has(v) ? (set.size>1 && set.delete(v)) : set.add(v);
       c.classList.toggle('on', set.has(v)); c.setAttribute('aria-pressed', set.has(v));
@@ -447,10 +468,37 @@ function chips(id, vals, set){
     box.append(c);
   });
 }
+function buildHelp(){
+  // Scenario help changes with the selection; policy help lists them all, since
+  // several are usually compared at once.
+  const pol = document.getElementById('helpPolicy');
+  pol.innerHTML = '<dl>' + META.policies.map(k =>
+    `<dt>${k}</dt><dd>${(META.policy_help||{})[k] || ''}</dd>`).join('') + '</dl>';
+  wireHelp('helpScenario'); wireHelp('helpPolicy');
+  refreshScenarioHelp();
+}
+
+function wireHelp(id){
+  const btn = document.getElementById(id + 'Btn'), box = document.getElementById(id);
+  btn.onclick = () => {
+    const open = box.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open);
+  };
+  // Escape closes it, so the keyboard is not trapped in an expanded panel.
+  box.addEventListener('keydown', e => { if (e.key === 'Escape') btn.click(); });
+}
+
+function refreshScenarioHelp(){
+  const sc = cur(), box = document.getElementById('helpScenario');
+  if (!sc || !box) return;
+  box.innerHTML = `<dl><dt>${sc.label}</dt><dd>${sc.plain || sc.mechanism}</dd></dl>`;
+}
+
 const cur = ()=> META.scenarios.find(x=>x.key===document.getElementById('scenario').value);
 function onScenario(opts){
   const sc = cur();
   document.getElementById('mech').textContent = sc.mechanism;
+  refreshScenarioHelp();
   document.getElementById('paramLabel').textContent = sc.param_name.replace(/_/g,' ');
   document.getElementById('paramHelp').textContent = sc.param_help;
   const p = document.getElementById('param'); p.innerHTML='';
@@ -566,7 +614,9 @@ function render(r, pending){
   const c1 = el('div',{className:'card'});
   c1.append(el('h2',{textContent:'Every run, side by side'}));
   c1.append(el('p',{className:'note',
-    textContent:'Green marks the best value in that column. "Matches" means this run reproduces the latency shape we actually observe in production — a candidate is only a viable explanation if some run does.'}));
+    textContent:'Green marks the best value in that column. "Matches" means a run reproduces BOTH observed numbers at once — a typical call near '
+      + T.p50[0].toFixed(1) + '–' + T.p50[1].toFixed(1) + 's and a worst-1% of '
+      + T.p99_peak[0] + '–' + T.p99_peak[1] + 's. Hitting either alone is easy and means nothing; the pairing is the bar a candidate must clear to stay believable.'}));
   const wrap = el('div',{className:'scroll'});
   const t = el('table');
   t.innerHTML = `<thead><tr>

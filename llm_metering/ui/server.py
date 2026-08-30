@@ -23,6 +23,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
+from ..exec_summary import PLAIN as _PLAIN
 from ..policy import POLICIES
 from ..scenarios import SCENARIOS, TARGET_P50, TARGET_P99_PEAK
 from ..sim.runner import Simulation
@@ -283,6 +284,9 @@ def scenarios() -> dict:
     return {
         "target": {"p50": TARGET_P50, "p99_peak": TARGET_P99_PEAK},
         "policies": list(POLICIES),
+        # Descriptions come from where the behaviour is defined, so the help text
+        # cannot quietly describe a policy that no longer works that way.
+        "policy_help": {k: v.description for k, v in POLICIES.items()},
         "retry_choices": RETRY_CHOICES,
         "cost_factor": _COST["factor"],
         # Which simulations are already computed. Without this the browser
@@ -298,6 +302,7 @@ def scenarios() -> dict:
                 "param_name": s.param_name,
                 "param_help": s.param_help,
                 "mechanism": s.mechanism,
+                "plain": _PLAIN.get(s.key, {}).get("body", ""),
                 "values": s.values,
             }
             for s in SCENARIOS

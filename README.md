@@ -101,6 +101,13 @@ none, and `p99_latency_peak` would then be 0.0 by construction rather than by
 measurement — `peak_requests` in the summary guards that, and both the UI and
 `matches_target()` check it.
 
+Candidate and policy names are explained behind a "?" beside each control,
+rather than permanently on the page: needed once, in the way every time after.
+Policy text comes from `PolicyConfig.description` in `policy.py`, so the help
+cannot quietly describe behaviour a policy no longer has; scenario text reuses
+the plain-language bodies in `exec_summary.py`. Chips also carry the same text
+as a native tooltip.
+
 The trade-off chart is the policy-choosing view: there is no single best policy,
 so it plots completed work against worst-case wait and marks the runs nothing
 else beats on both axes at once. Picking among those is a judgement about

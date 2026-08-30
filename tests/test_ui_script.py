@@ -77,7 +77,8 @@ def test_module_globals_are_declared(page):
                        "timer", "inflight", "estimate", "schedule", "run", "render",
                        "boot", "chips", "cur", "onScenario", "applyState", "copyLink",
                        "readURL", "writeURL", "isProduction", "updateViewBar",
-                       "updateStatus", "showProgress", "DEBOUNCE_MS", "tradeoff", "headroom", "latency",
+                       "updateStatus", "showProgress", "DEBOUNCE_MS", "buildHelp", "wireHelp",
+                       "refreshScenarioHelp", "tradeoff", "headroom", "latency",
                        "PAL", "G", "el", "f", "matches"],
         "overview.html": ["PALETTE", "G", "pct", "render", "timeline"],
     }[page]
@@ -148,3 +149,25 @@ def test_no_auto_run_cap_remains():
     assert "AUTO_BUDGET" not in src, "the cap should be gone, not just raised"
     assert "Too slow to run on every change" not in src
     assert "setTimeout(run, DEBOUNCE_MS)" in src, "every change should still debounce"
+
+
+def test_option_meanings_are_explained_behind_a_control():
+    """Policy names like `admission_cache_accel` mean nothing on their own, but
+    explaining them permanently on the page is clutter. They live behind a "?"."""
+    src = script_of("index.html")
+    html = (UI / "index.html").read_text()
+    assert 'class="helpbtn"' in html, "needs a help affordance"
+    assert 'aria-expanded' in html and 'aria-controls' in html, "must be announced"
+    assert "META.policy_help" in src, "policy text must come from the server"
+    assert "c.title = help" in src, "chips should also carry a native tooltip"
+    assert "Escape" in src, "an expanded panel must be dismissible from the keyboard"
+
+
+def test_the_matches_bar_is_stated_where_the_badge_appears():
+    """The 'both numbers at once' rule is the methodological bar. It was in a
+    header paragraph nobody re-reads; it belongs next to the badge."""
+    src = script_of("index.html")
+    html = (UI / "index.html").read_text()
+    assert "How to use this" not in html, "the filler paragraph should be gone"
+    assert "BOTH observed numbers at once" in src
+    assert "Hitting either alone is easy" in src
